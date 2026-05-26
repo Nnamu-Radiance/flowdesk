@@ -1,4 +1,6 @@
 # Fix sys.path to prioritize the service-specific apps directory
+from pathlib import Path
+import sys
 # This prevents root-level "apps" from shadowing local service apps
 service_root = Path(__file__).resolve().parent.parent
 project_root = service_root.parent.parent
