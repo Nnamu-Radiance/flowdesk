@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "channels",
+    "apps.workflows",
     "apps.notifications",
 ]
 
