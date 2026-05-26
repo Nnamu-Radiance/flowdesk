@@ -5,7 +5,7 @@ from django.db import connection
 from django.utils import timezone
 from rest_framework import permissions, response, status, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 
 from apps.workflows.events import publish_workflow_created
 from apps.workflows.models import CSVImportJob, Document, Workflow
@@ -17,7 +17,7 @@ from apps.workflows.tasks import process_csv_bulk, process_document
 class WorkflowViewSet(viewsets.ModelViewSet):
     serializer_class = WorkflowSerializer
     permission_classes = [permissions.IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
 
     def get_queryset(self):
         return Workflow.objects.filter(created_by_id=self.request.user.id).order_by("-created_at")
