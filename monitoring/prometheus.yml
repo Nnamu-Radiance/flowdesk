@@ -1,0 +1,37 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - '/etc/prometheus/rules.yml'
+
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  - job_name: 'auth-service'
+    static_configs:
+      - targets: ['auth-service:8001']
+    metrics_path: '/metrics/'
+
+  - job_name: 'workflow-service'
+    static_configs:
+      - targets: ['workflow-service:8002']
+    metrics_path: '/metrics/'
+
+  - job_name: 'approval-service'
+    static_configs:
+      - targets: ['approval-service:8003']
+    metrics_path: '/metrics/'
+
+  - job_name: 'notification-service'
+    static_configs:
+      - targets: ['notification-service:8004']
+    metrics_path: '/metrics/'
+
+  - job_name: 'analytics-service'
+    static_configs:
+      - targets: ['analytics-service:8005']
+    metrics_path: '/metrics/'
+

@@ -1,0 +1,15 @@
+<div class="card cursor-pointer hover:shadow-lg" data-workflow-id="{{ workflow.id }}" onclick="location.href='/workflows/{{ workflow.id }}/'">
+  <div class="card-header">
+    <h3 class="text-lg font-semibold">{{ workflow.name }}</h3>
+    <span class="badge badge-warning">{{ workflow.status }}</span>
+  </div>
+
+  {% if workflow.document %}
+  <p class="text-sm text-gray-600">{{ workflow.document.filename }}</p>
+  {% endif %}
+
+  <div class="mt-4 text-xs text-gray-500 flex justify-between">
+    <span>Deadline: {{ workflow.deadline|date:'M d, Y' }}</span>
+    <span>SLA: {{ workflow.sla_status }}</span>
+  </div>
+</div>

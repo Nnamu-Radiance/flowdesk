@@ -1,0 +1,23 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Analytics - FlowDesk{% endblock %}
+{% block content %}
+<section class="space-y-6">
+  <h1 class="text-2xl font-bold">Analytics</h1>
+  <article class="card">
+    <h2 class="font-semibold mb-2">SLA Report</h2>
+    <pre id="sla-report" class="text-xs overflow-x-auto"></pre>
+  </article>
+  <article class="card">
+    <h2 class="font-semibold mb-2">Workflow Volume</h2>
+    <pre id="volume-report" class="text-xs overflow-x-auto"></pre>
+  </article>
+  <article class="card">
+    <h2 class="font-semibold mb-2">Approver Performance</h2>
+    <pre id="performance-report" class="text-xs overflow-x-auto"></pre>
+  </article>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/analytics.js' %}"></script>
+{% endblock %}

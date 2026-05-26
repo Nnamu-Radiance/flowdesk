@@ -1,0 +1,41 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}FlowDesk{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'css/animations.css' %}">
+  {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-gray-50 text-gray-900">
+  {% include 'includes/navbar.html' %}
+
+  <div class="flex min-h-screen">
+    {% include 'includes/sidebar.html' %}
+
+    <main class="flex-1 p-6">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+
+  <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+  <script src="{% static 'js/utils.js' %}"></script>
+  <script src="{% static 'js/auth.js' %}"></script>
+  <script src="{% static 'js/api.js' %}"></script>
+  <script src="{% static 'js/notifications.js' %}"></script>
+  {% block extra_js %}{% endblock %}
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (AuthManager.isLoggedIn()) {
+        initNotifications();
+        window.notificationManager = notificationManager;
+        document.dispatchEvent(new CustomEvent('flowdesk:notifications-ready'));
+      }
+    });
+  </script>
+</body>
+</html>
