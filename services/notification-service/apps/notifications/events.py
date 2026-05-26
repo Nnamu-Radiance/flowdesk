@@ -1,4 +1,4 @@
-﻿from apps.notifications.tasks import handle_event
+from apps.notifications.tasks import handle_event
 
 
 def handle_approval_requested(event: dict):

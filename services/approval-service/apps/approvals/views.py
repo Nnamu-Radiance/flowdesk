@@ -1,4 +1,4 @@
-﻿from django.core.cache import cache
+from django.core.cache import cache
 from django.db import connection
 from rest_framework import permissions, response, status, views
 from rest_framework.decorators import api_view, permission_classes

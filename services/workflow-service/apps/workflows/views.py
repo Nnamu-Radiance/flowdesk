@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 
 from django.core.cache import cache
 from django.db import connection

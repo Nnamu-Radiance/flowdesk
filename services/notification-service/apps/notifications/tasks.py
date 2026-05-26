@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 
 from asgiref.sync import async_to_sync
 from celery import Task, shared_task

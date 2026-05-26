@@ -1,4 +1,4 @@
-﻿from django.core.cache import cache
+from django.core.cache import cache
 
 
 class AnalyticsService:

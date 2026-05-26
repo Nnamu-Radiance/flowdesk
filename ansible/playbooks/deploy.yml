@@ -1,4 +1,4 @@
-﻿---
+---
 - name: Deploy FlowDesk to Kubernetes
   hosts: docker_hosts
   become: yes

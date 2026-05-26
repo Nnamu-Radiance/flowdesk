@@ -1,4 +1,4 @@
-﻿from rest_framework import permissions, response, status
+from rest_framework import permissions, response, status
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 

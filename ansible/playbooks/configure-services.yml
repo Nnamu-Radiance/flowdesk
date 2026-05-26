@@ -1,4 +1,4 @@
-﻿---
+---
 - name: Configure FlowDesk directories and env
   hosts: docker_hosts
   become: yes

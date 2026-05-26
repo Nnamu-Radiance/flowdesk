@@ -1,4 +1,4 @@
-﻿from rest_framework import serializers
+from rest_framework import serializers
 
 from apps.approvals.models import ApprovalRecord
 from apps.workflows.models import Document, Workflow

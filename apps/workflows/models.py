@@ -1,4 +1,4 @@
-﻿import hashlib
+import hashlib
 from datetime import timedelta
 
 from django.conf import settings

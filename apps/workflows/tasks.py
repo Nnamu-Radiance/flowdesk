@@ -1,4 +1,4 @@
-﻿import csv
+import csv
 from io import StringIO
 
 from celery import Task, shared_task

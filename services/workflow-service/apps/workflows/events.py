@@ -1,4 +1,4 @@
-﻿from shared.events.publisher import publish_event
+from shared.events.publisher import publish_event
 
 
 def publish_workflow_created(workflow_id: int, submitter_id: int, deadline: str | None, correlation_id: str):
