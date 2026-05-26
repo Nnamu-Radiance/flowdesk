@@ -1,7 +1,6 @@
 import pytest
 from rest_framework.test import APIClient
-from django.urls import reverse
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 from apps.approvals.models import ApprovalChain, ApprovalStep, ApprovalRecord
 
@@ -48,7 +47,7 @@ def test_approval_decision(api_client):
             approver_id=1,
             action="approve",
             comments="Looks good",
-            correlation_id=None
+            correlation_id=ANY,
         )
 
 
@@ -73,24 +72,24 @@ def test_approval_service_logic():
     step1 = ApprovalStep.objects.create(chain=chain, order=1, approver_id=1, status="pending")
     step2 = ApprovalStep.objects.create(chain=chain, order=2, approver_id=2, status="pending")
     
-    with patch("apps.approvals.services.publish_approval_completed") as mock_pub:
-        status = ApprovalService.decision(chain, 1, "approve")
-        assert status == "pending" # Still waiting for step 2
+    with patch("apps.approvals.services.publish_event") as mock_pub:
+        status = ApprovalService.decision(chain, 1, "approve", "step 1")
+        assert status == "in_approval"  # Still waiting for step 2
         step1.refresh_from_db()
         assert step1.status == "approved"
         
-        status = ApprovalService.decision(chain, 2, "approve")
+        status = ApprovalService.decision(chain, 2, "approve", "step 2")
         assert status == "approved"
         step2.refresh_from_db()
         assert step2.status == "approved"
-        mock_pub.assert_called_once()
+        assert mock_pub.call_count == 3
 
 
 @pytest.mark.django_db
 def test_approval_record_creation(api_client):
     chain = ApprovalChain.objects.create(workflow_id=103, name="Chain 3")
     ApprovalStep.objects.create(chain=chain, order=1, approver_id=1, status="pending")
-    
-    with patch("apps.approvals.services.ApprovalService.decision", return_value="approved"):
-        api_client.post(f"/api/approvals/{chain.id}/approve/", {"comments": "Good"})
-        assert ApprovalRecord.objects.filter(chain=chain, approver_id=1, action="approve").exists()
+
+    response = api_client.post(f"/api/approvals/{chain.id}/approve/", {"comments": "Good"})
+    assert response.status_code == 200
+    assert ApprovalRecord.objects.filter(workflow_id=chain.workflow_id, approver_id=1, action="approve").exists()
