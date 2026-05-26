@@ -23,7 +23,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "django_celery_beat",
-    "apps.workflows",
     "apps.approvals",
 ]
 
