@@ -1,0 +1,30 @@
+﻿---
+- name: Configure FlowDesk directories and env
+  hosts: docker_hosts
+  become: yes
+  vars:
+    app_root: /opt/flowdesk
+  tasks:
+    - name: Create application root
+      file:
+        path: "{{ app_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Copy compose file
+      copy:
+        src: ../../docker-compose.yml
+        dest: "{{ app_root }}/docker-compose.yml"
+        mode: "0644"
+
+    - name: Copy Kubernetes manifests
+      copy:
+        src: ../../k8s/
+        dest: "{{ app_root }}/k8s/"
+        mode: "0644"
+
+    - name: Copy environment file
+      copy:
+        src: ../../.env.example
+        dest: "{{ app_root }}/.env.local"
+        mode: "0600"

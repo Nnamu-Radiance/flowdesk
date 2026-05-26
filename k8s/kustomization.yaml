@@ -1,0 +1,21 @@
+﻿resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - postgres.yaml
+  - redis.yaml
+  - auth-service/deployment.yaml
+  - auth-service/service.yaml
+  - workflow-service/deployment.yaml
+  - workflow-service/service.yaml
+  - approval-service/deployment.yaml
+  - approval-service/service.yaml
+  - notification-service/deployment.yaml
+  - notification-service/service.yaml
+  - analytics-service/deployment.yaml
+  - analytics-service/service.yaml
+  - celery-worker.yaml
+  - celery-beat.yaml
+  - nginx/configmap.yaml
+  - nginx/deployment.yaml
+  - ingress.yaml

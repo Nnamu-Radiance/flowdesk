@@ -1,0 +1,368 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: flowdesk-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-flowdesk}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowdesk}
+      POSTGRES_DB: ${POSTGRES_DB:-flowdesk_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowdesk} -d ${POSTGRES_DB:-flowdesk_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - flowdesk-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: flowdesk-redis
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - flowdesk-network
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-auth
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8001"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DEBUG: ${AUTH_SERVICE_DEBUG:-True}
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=auth_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      PYTHONPATH: /app
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./services/auth-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowdesk-network
+
+  workflow-service:
+    build:
+      context: ./services/workflow-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-workflow
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8002"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DEBUG: ${WORKFLOW_SERVICE_DEBUG:-True}
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=workflow_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      PYTHONPATH: /app
+    ports:
+      - "8002:8002"
+    volumes:
+      - ./services/workflow-service:/app
+      - ./shared:/app/shared
+      - media_data:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowdesk-network
+
+  approval-service:
+    build:
+      context: ./services/approval-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-approval
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8003"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DEBUG: ${APPROVAL_SERVICE_DEBUG:-True}
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=approval_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      PYTHONPATH: /app
+    ports:
+      - "8003:8003"
+    volumes:
+      - ./services/approval-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowdesk-network
+
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-notification
+    command: sh -c "python manage.py migrate && daphne -b 0.0.0.0 -p 8004 config.asgi:application"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DEBUG: ${NOTIFICATION_SERVICE_DEBUG:-True}
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=notification_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      PYTHONPATH: /app
+    ports:
+      - "8004:8004"
+    volumes:
+      - ./services/notification-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowdesk-network
+
+  analytics-service:
+    build:
+      context: ./services/analytics-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-analytics
+    command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8005"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DEBUG: ${ANALYTICS_SERVICE_DEBUG:-True}
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=analytics_svc,approval_svc,workflow_svc,auth_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+      PYTHONPATH: /app
+    ports:
+      - "8005:8005"
+    volumes:
+      - ./services/analytics-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowdesk-network
+
+  celery-workflow:
+    build:
+      context: ./services/workflow-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-celery-workflow
+    command: sh -c "python manage.py migrate && celery -A config worker -l info -Q workflow -c 4"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=workflow_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      PYTHONPATH: /app
+    volumes:
+      - ./services/workflow-service:/app
+      - ./shared:/app/shared
+      - media_data:/app/media
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowdesk-network
+
+  celery-approval:
+    build:
+      context: ./services/approval-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-celery-approval
+    command: sh -c "python manage.py migrate && celery -A config worker -l info -Q approval -c 4"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=approval_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      PYTHONPATH: /app
+    volumes:
+      - ./services/approval-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowdesk-network
+
+  celery-notification:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-celery-notification
+    command: sh -c "python manage.py migrate && celery -A config worker -l info -Q notification -c 2"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=notification_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      PYTHONPATH: /app
+    volumes:
+      - ./services/notification-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - flowdesk-network
+
+  celery-beat:
+    build:
+      context: ./services/approval-service
+      dockerfile: Dockerfile
+    container_name: flowdesk-celery-beat
+    command: sh -c "python manage.py migrate && celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.development
+      DATABASE_URL: postgresql://flowdesk:flowdesk@postgres:5432/flowdesk_db?options=-csearch_path=approval_svc
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CELERY_BROKER_URL: ${CELERY_BROKER_URL:-redis://redis:6379/0}
+      CELERY_RESULT_BACKEND: ${CELERY_RESULT_BACKEND:-redis://redis:6379/1}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change-me}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      PYTHONPATH: /app
+    volumes:
+      - ./services/approval-service:/app
+      - ./shared:/app/shared
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      approval-service:
+        condition: service_started
+    networks:
+      - flowdesk-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: flowdesk-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./frontend/static:/var/www/flowdesk/static:ro
+    depends_on:
+      - auth-service
+      - workflow-service
+      - approval-service
+      - notification-service
+      - analytics-service
+    networks:
+      - flowdesk-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: flowdesk-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/rules.yml:/etc/prometheus/rules.yml
+      - prometheus_data:/prometheus
+    networks:
+      - flowdesk-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: flowdesk-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+    volumes:
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - flowdesk-network
+
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: flowdesk-jenkins
+    user: root
+    security_opt:
+      - no-new-privileges:false
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    environment:
+      JAVA_OPTS: "-Djenkinsci.plugins.workflow.steps.durabletask.DurableTaskStep.WATCHING_RECURRENCE_PERIOD=1000"
+    volumes:
+      - jenkins_data:/var/jenkins_home
+      # Mount Docker socket to allow Jenkins to build images using the host's Docker engine
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - flowdesk-network
+
+networks:
+  flowdesk-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  media_data:
+  prometheus_data:
+  grafana_data:
+  jenkins_data:
+

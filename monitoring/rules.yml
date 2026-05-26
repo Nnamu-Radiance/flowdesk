@@ -1,0 +1,21 @@
+﻿groups:
+  - name: flowdesk.rules
+    interval: 30s
+    rules:
+      - alert: ServiceDown
+        expr: up{job=~"auth-service|workflow-service|approval-service|notification-service|analytics-service"} == 0
+        for: 1m
+        annotations:
+          summary: "FlowDesk service down"
+
+      - alert: HighErrorRate
+        expr: rate(django_http_requests_total_by_status_total{status=~"5.."}[5m]) > 0.05
+        for: 5m
+        annotations:
+          summary: "High HTTP 5xx rate"
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.95, rate(django_http_requests_latency_including_middlewares_seconds_bucket[5m])) > 1
+        for: 5m
+        annotations:
+          summary: "High p95 latency"
