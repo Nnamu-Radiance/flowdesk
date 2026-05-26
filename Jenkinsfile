@@ -44,9 +44,7 @@
             for svc in $SERVICES; do
                 cd services/$svc
                 . venv/bin/activate
-                # We skip coverage check for now to fix the pipeline, 
-                # but keep the report generation for visibility.
-                pytest tests --cov=apps || true
+                pytest tests --cov=apps --cov-fail-under=80
                 deactivate
                 cd ../..
             done
