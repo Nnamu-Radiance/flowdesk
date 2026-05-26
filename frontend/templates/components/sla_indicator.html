@@ -1,0 +1,11 @@
+{% with sla=workflow.sla_status %}
+<div class="flex items-center gap-2">
+  <div class="w-full bg-gray-200 rounded-full h-2">
+    <div
+      class="h-2 rounded-full {% if sla == 'on_track' %}bg-green-500{% elif sla == 'warning_50' %}bg-yellow-400{% elif sla == 'warning_75' %}bg-orange-500{% else %}bg-red-600{% endif %}"
+      style="width: {{ workflow.sla_percentage|default:0 }}%"
+    ></div>
+  </div>
+  <span class="text-xs text-gray-500 whitespace-nowrap">{{ workflow.remaining_time|default:'-' }}</span>
+</div>
+{% endwith %}

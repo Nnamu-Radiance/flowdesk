@@ -1,0 +1,21 @@
+version: "3.9"
+
+services:
+  django:
+    image: flowdesk/app:latest
+    env_file:
+      - .env.example
+    ports:
+      - "8000:8000"
+
+  celery:
+    image: flowdesk/app:latest
+    command: celery -A config worker -l info
+    env_file:
+      - .env.example
+
+  celery-beat:
+    image: flowdesk/app:latest
+    command: celery -A config beat -l info
+    env_file:
+      - .env.example

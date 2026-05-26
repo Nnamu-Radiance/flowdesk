@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: flowdesk
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: docker.io/flowdesk/auth-service:latest
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8001"]
+          ports:
+            - containerPort: 8001
+          env:
+            - name: DJANGO_SETTINGS_MODULE
+              value: config.settings.production
+            - name: DJANGO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: DJANGO_SECRET_KEY
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: JWT_SECRET_KEY
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: DATABASE_URL_AUTH
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: flowdesk-config
+                  key: REDIS_URL
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: flowdesk-config
+                  key: CELERY_BROKER_URL
+          livenessProbe:
+            httpGet:
+              path: /health/
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health/
+              port: 8001
+            initialDelaySeconds: 10
+            periodSeconds: 5
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-service-hpa
+  namespace: flowdesk
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+  minReplicas: 1
+  maxReplicas: 3
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
