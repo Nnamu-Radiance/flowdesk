@@ -1,0 +1,16 @@
+{
+  "dashboard": {
+    "title": "FlowDesk Django Application",
+    "panels": [
+      {
+        "title": "HTTP Request Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(django_http_requests_total[5m])"
+          }
+        ]
+      }
+    ]
+  }
+}

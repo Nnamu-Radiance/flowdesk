@@ -1,0 +1,40 @@
+﻿apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-worker
+  namespace: flowdesk
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: celery-worker
+  template:
+    metadata:
+      labels:
+        app: celery-worker
+    spec:
+      containers:
+        - name: celery-workflow
+          image: docker.io/flowdesk/workflow-service:latest
+          command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "workflow"]
+          envFrom:
+            - configMapRef:
+                name: flowdesk-config
+            - secretRef:
+                name: flowdesk-secrets
+        - name: celery-approval
+          image: docker.io/flowdesk/approval-service:latest
+          command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "approval"]
+          envFrom:
+            - configMapRef:
+                name: flowdesk-config
+            - secretRef:
+                name: flowdesk-secrets
+        - name: celery-notification
+          image: docker.io/flowdesk/notification-service:latest
+          command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "notification"]
+          envFrom:
+            - configMapRef:
+                name: flowdesk-config
+            - secretRef:
+                name: flowdesk-secrets

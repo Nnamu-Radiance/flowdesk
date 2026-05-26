@@ -1,0 +1,11 @@
+﻿apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: flowdesk-config
+  namespace: flowdesk
+data:
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  ALLOWED_HOSTS: flowdesk.local
+  DEBUG: "False"
