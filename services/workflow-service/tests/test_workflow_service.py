@@ -93,7 +93,7 @@ def test_process_document_task():
     workflow = Workflow.objects.create(name="DocWF", created_by_id=1)
     Document.objects.create(workflow=workflow, filename="test.pdf", doc_id="DOC1")
     
-    with patch("apps.workflows.tasks.publish_document_processed") as mock_pub:
+    with patch("apps.workflows.events.publish_document_processed") as mock_pub:
         result = process_document(workflow.id)
         assert result["status"] == "processed"
         doc = Document.objects.get(workflow=workflow)
