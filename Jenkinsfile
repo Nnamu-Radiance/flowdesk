@@ -1,4 +1,4 @@
-pipeline {
+﻿pipeline {
   agent any
 
   options {
@@ -38,17 +38,19 @@ pipeline {
     }
 
     stage('Unit Tests') {
-      steps {
+    steps {
         sh '''
-          set -e
-          for svc in $SERVICES; do
-            . services/$svc/venv/bin/activate
-            pytest services/$svc/tests
-            deactivate
-          done
+            set -e
+            for svc in $SERVICES; do
+                cd services/$svc
+                . venv/bin/activate
+                pytest tests --cov=apps --cov-fail-under=80
+                deactivate
+                cd ../..
+            done
         '''
-      }
     }
+}
 
     stage('Build Docker Images') {
       steps {
