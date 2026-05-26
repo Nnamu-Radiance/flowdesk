@@ -1,2 +1,1 @@
-﻿# Admin registration for analytics
-
+# Admin registration for analytics
