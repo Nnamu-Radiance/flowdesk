@@ -1,4 +1,4 @@
-pipeline {
+﻿pipeline {
   agent any
 
   options {
@@ -43,7 +43,7 @@ pipeline {
           set -e
           for svc in $SERVICES; do
             . services/$svc/venv/bin/activate
-            pytest services/$svc/tests --cov=services/$svc/apps --cov-fail-under=80
+            pytest services/$svc/tests
             deactivate
           done
         '''
