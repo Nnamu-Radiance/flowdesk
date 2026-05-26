@@ -49,7 +49,7 @@ def test_user_endpoints(django_user_model):
     }
     response = client.post(reverse("auth-users"), new_user_data)
     assert response.status_code == 201
-    assert User.objects.filter(username="newuser").exists()
+    assert django_user_model.objects.filter(username="newuser").exists()
 
     # Test Update Role
     response = client.patch(reverse("auth-user-role", kwargs={"pk": user.pk}), {"role": "approver"})
@@ -67,10 +67,13 @@ def test_user_endpoints(django_user_model):
 
 
 @pytest.mark.django_db
-def test_jwt_local_authentication(django_user_model):
+def test_jwt_local_authentication(django_user_model, monkeypatch, settings):
     from apps.auth.authentication import JWTLocalAuthentication
     from rest_framework_simplejwt.tokens import AccessToken
     from rest_framework.exceptions import AuthenticationFailed
+
+    # Ensure JWT secret is configured for shared validator
+    monkeypatch.setenv("JWT_SECRET_KEY", settings.SECRET_KEY)
 
     user = django_user_model.objects.create_user(username="jwt_user", role="submitter")
     auth = JWTLocalAuthentication()
