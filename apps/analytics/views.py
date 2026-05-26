@@ -1,4 +1,4 @@
-﻿from django.db.models import Avg, Count
+from django.db.models import Avg, Count
 from django.utils import timezone
 from rest_framework import permissions, response
 from rest_framework.views import APIView

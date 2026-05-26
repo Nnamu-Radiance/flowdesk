@@ -1,4 +1,4 @@
-﻿from rest_framework import serializers
+from rest_framework import serializers
 
 from apps.auth.models import CustomUser
 

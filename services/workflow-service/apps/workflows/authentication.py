@@ -1,4 +1,4 @@
-﻿from rest_framework import authentication, exceptions
+from rest_framework import authentication, exceptions
 
 from apps.workflows.service_user import ServiceUser
 from shared.auth.jwt_validator import validate_jwt

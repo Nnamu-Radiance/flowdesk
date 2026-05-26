@@ -1,4 +1,4 @@
-﻿from shared.events.publisher import publish_event
+from shared.events.publisher import publish_event
 
 
 def publish_sla_warning(workflow_id: int, percentage: int):

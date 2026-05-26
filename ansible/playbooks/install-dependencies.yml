@@ -1,4 +1,4 @@
-﻿---
+---
 - name: Install base dependencies
   hosts: all
   become: yes

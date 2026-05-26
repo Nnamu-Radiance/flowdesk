@@ -1,4 +1,4 @@
-﻿resources:
+resources:
   - namespace.yaml
   - configmap.yaml
   - secret.yaml

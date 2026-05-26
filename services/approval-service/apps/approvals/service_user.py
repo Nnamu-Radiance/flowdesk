@@ -1,4 +1,4 @@
-﻿class ServiceUser:
+class ServiceUser:
     def __init__(self, user_id: int, role: str = "submitter"):
         self.id = user_id
         self.pk = user_id

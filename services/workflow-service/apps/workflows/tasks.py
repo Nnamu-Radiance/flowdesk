@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 
 from celery import Task, shared_task
 

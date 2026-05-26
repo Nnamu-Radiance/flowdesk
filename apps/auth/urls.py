@@ -1,4 +1,4 @@
-﻿from django.urls import path
+from django.urls import path
 
 from apps.auth.views import LoginView, LogoutView, MeView, RefreshView
 
