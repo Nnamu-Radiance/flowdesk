@@ -36,7 +36,7 @@ def test_user_endpoints(django_user_model):
     assert response.data["username"] == "admin_user"
 
     # Test List
-    response = client.get(reverse("auth-users-list"))
+    response = client.get(reverse("auth-users"))
     assert response.status_code == 200
     assert len(response.data) >= 2
 
@@ -47,7 +47,7 @@ def test_user_endpoints(django_user_model):
         "password": "password123",
         "role": "submitter"
     }
-    response = client.post(reverse("auth-users-list"), new_user_data)
+    response = client.post(reverse("auth-users"), new_user_data)
     assert response.status_code == 201
     assert User.objects.filter(username="newuser").exists()
 
