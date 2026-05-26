@@ -90,6 +90,7 @@ def test_approval_record_creation(api_client):
     chain = ApprovalChain.objects.create(workflow_id=103, name="Chain 3")
     ApprovalStep.objects.create(chain=chain, order=1, approver_id=1, status="pending")
 
-    response = api_client.post(f"/api/approvals/{chain.id}/approve/", {"comments": "Good"})
+    with patch("apps.approvals.services.publish_event"):
+        response = api_client.post(f"/api/approvals/{chain.id}/approve/", {"comments": "Good"})
     assert response.status_code == 200
     assert ApprovalRecord.objects.filter(workflow_id=chain.workflow_id, approver_id=1, action="approve").exists()
