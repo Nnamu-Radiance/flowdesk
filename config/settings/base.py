@@ -11,7 +11,7 @@ environ.Env.read_env(BASE_DIR / ".env")
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-secret")
 DEBUG = env("DEBUG", default=False)
-ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1"])
+ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "auth-service", "workflow-service", "approval-service", "notification-service", "analytics-service", "nginx"])
 
 INSTALLED_APPS = [
     "django_prometheus",
