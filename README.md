@@ -115,6 +115,11 @@ Jenkins-only CI/CD pipeline is defined in `Jenkinsfile`:
 6. Deploy Kubernetes manifests
 7. Smoke checks
 
+Jenkins setup guides:
+
+1. Local Jenkins setup: [docs/jenkins-local-setup.md](docs/jenkins-local-setup.md)
+2. Production Jenkins setup: [docs/jenkins-production-server-setup.md](docs/jenkins-production-server-setup.md)
+
 ## Kubernetes
 Apply all manifests:
 ```bash
