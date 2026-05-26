@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Workflows - FlowDesk{% endblock %}
+{% block content %}
+<div class="space-y-6">
+    <div class="flex items-center justify-between">
+        <h1 class="text-3xl font-bold">Workflows</h1>
+        <button id="upload-btn" class="btn btn-primary">Upload Document</button>
+    </div>
+    <div class="bg-white p-4 rounded-lg border border-gray-200 flex gap-4">
+        <select id="status-filter" class="form-input w-48">
+            <option value="">All Statuses</option>
+            <option value="draft">Draft</option>
+            <option value="submitted">Submitted</option>
+            <option value="in_approval">In Approval</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+        </select>
+        <input type="search" id="search-input" placeholder="Search workflows..." class="form-input flex-1">
+        <button id="reset-filters" class="btn btn-secondary">Reset</button>
+    </div>
+    <div id="workflows-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/workflows.js' %}"></script>
+{% endblock %}

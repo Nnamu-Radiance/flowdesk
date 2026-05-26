@@ -1,0 +1,52 @@
+﻿{
+  "dashboard": {
+    "title": "FlowDesk Hybrid Services",
+    "panels": [
+      {
+        "title": "Auth Request Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(django_http_requests_total_by_method_total{job='auth-service'}[5m])"
+          }
+        ]
+      },
+      {
+        "title": "Workflow Request Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(django_http_requests_total_by_method_total{job='workflow-service'}[5m])"
+          }
+        ]
+      },
+      {
+        "title": "Approval Request Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(django_http_requests_total_by_method_total{job='approval-service'}[5m])"
+          }
+        ]
+      },
+      {
+        "title": "Notification WS/HTTP Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(django_http_requests_total_by_method_total{job='notification-service'}[5m])"
+          }
+        ]
+      },
+      {
+        "title": "Analytics Request Rate",
+        "type": "timeseries",
+        "targets": [
+          {
+            "expr": "rate(django_http_requests_total_by_method_total{job='analytics-service'}[5m])"
+          }
+        ]
+      }
+    ]
+  }
+}

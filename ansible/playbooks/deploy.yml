@@ -1,0 +1,13 @@
+---
+- name: Deploy FlowDesk to Kubernetes
+  hosts: docker_hosts
+  become: yes
+  vars:
+    app_root: /opt/flowdesk
+  tasks:
+    - name: Apply Kubernetes namespace and base resources
+      shell: |
+        kubectl apply -f {{ app_root }}/k8s/namespace.yaml
+        kubectl apply -f {{ app_root }}/k8s/configmap.yaml
+        kubectl apply -f {{ app_root }}/k8s/secret.yaml
+        kubectl apply -k {{ app_root }}/k8s
