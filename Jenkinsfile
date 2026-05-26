@@ -1,6 +1,14 @@
 pipeline {
   agent any
 
+  parameters {
+    booleanParam(
+      name: 'LOCAL_ONLY',
+      defaultValue: true,
+      description: 'Run only checkout/lint/tests and skip image build, registry push, Kubernetes deploy, and smoke tests.'
+    )
+  }
+
   options {
     timestamps()
     timeout(time: 1, unit: 'HOURS')
@@ -53,6 +61,9 @@ pipeline {
 }
 
     stage('Build Docker Images') {
+      when {
+        expression { return !params.LOCAL_ONLY }
+      }
       steps {
         sh '''
           set -e
@@ -66,7 +77,7 @@ pipeline {
 
     stage('Push to Registry') {
       when {
-        expression { return env.DOCKER_CREDENTIALS_USR?.trim() }
+        expression { return !params.LOCAL_ONLY && env.DOCKER_CREDENTIALS_USR?.trim() }
       }
       steps {
         sh '''
@@ -82,7 +93,7 @@ pipeline {
 
     stage('Deploy to Kubernetes') {
       when {
-        expression { return fileExists('k8s/kustomization.yaml') }
+        expression { return !params.LOCAL_ONLY && fileExists('k8s/kustomization.yaml') }
       }
       steps {
         sh '''
@@ -105,6 +116,9 @@ pipeline {
     }
 
     stage('Smoke Tests') {
+      when {
+        expression { return !params.LOCAL_ONLY }
+      }
       steps {
         sh '''
           curl -f http://localhost/ || true
