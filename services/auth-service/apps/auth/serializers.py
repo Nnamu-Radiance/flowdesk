@@ -27,9 +27,8 @@ def username_from_email(email: str) -> str:
 
 
 class UserSerializer(serializers.ModelSerializer):
-    is_active    = serializers.BooleanField(read_only=True)
+    is_active = serializers.BooleanField(read_only=True)
     display_role = serializers.SerializerMethodField()
-
 
     class Meta:
         model = User
@@ -80,8 +79,8 @@ class SignupSerializer(serializers.Serializer):
 
 
 class CreateUserSerializer(SignupSerializer):
-    password      = serializers.CharField(write_only=True, min_length=8, required=False)
-    role          = serializers.ChoiceField(choices=User.ROLE_CHOICES)
+    password = serializers.CharField(write_only=True, min_length=8, required=False)
+    role = serializers.ChoiceField(choices=User.ROLE_CHOICES)
     approver_type = serializers.ChoiceField(
         choices=User.ApproverType.choices,
         required=False,
@@ -89,7 +88,7 @@ class CreateUserSerializer(SignupSerializer):
     )
 
     def validate(self, data):
-        role          = data.get("role")
+        role = data.get("role")
         approver_type = data.get("approver_type")
         if role == "approver" and not approver_type:
             raise serializers.ValidationError(
@@ -98,10 +97,10 @@ class CreateUserSerializer(SignupSerializer):
         return data
 
     def create(self, validated_data):
-        password      = validated_data.pop("password", None) or User.objects.make_random_password(length=14)
+        password = validated_data.pop("password", None) or User.objects.make_random_password(length=14)
         approver_type = validated_data.pop("approver_type", None)
-        user          = super().create({**validated_data, "password": password})
-        user.role          = validated_data["role"]
+        user = super().create({**validated_data, "password": password})
+        user.role = validated_data["role"]
         user.approver_type = approver_type if validated_data["role"] == "approver" else None
         user.save(update_fields=["role", "approver_type"])
         user._temporary_password = password
@@ -116,7 +115,7 @@ class MagicLinkRequestSerializer(serializers.Serializer):
 
 
 class RoleUpdateSerializer(serializers.Serializer):
-    role          = serializers.ChoiceField(choices=User.ROLE_CHOICES)
+    role = serializers.ChoiceField(choices=User.ROLE_CHOICES)
     approver_type = serializers.ChoiceField(
         choices=User.ApproverType.choices,
         required=False,
@@ -124,7 +123,7 @@ class RoleUpdateSerializer(serializers.Serializer):
     )
 
     def validate(self, data):
-        role          = data.get("role")
+        role = data.get("role")
         approver_type = data.get("approver_type")
 
         if role == "approver" and not approver_type:
@@ -203,11 +202,11 @@ class FlowDeskTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-        token["user_id"]      = user.id
-        token["role"]         = user.role
+        token["user_id"] = user.id
+        token["role"] = user.role
         token["approver_type"] = user.approver_type or ""
-        token["full_name"]    = user.full_name or user.get_full_name()
-        token["matricule"]    = user.matricule or ""
-        token["faculty"]      = user.faculty
-        token["department"]   = user.department
+        token["full_name"] = user.full_name or user.get_full_name()
+        token["matricule"] = user.matricule or ""
+        token["faculty"] = user.faculty
+        token["department"] = user.department
         return token
