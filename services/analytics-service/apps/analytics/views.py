@@ -8,7 +8,10 @@ from apps.analytics.services import AnalyticsService
 
 class IsAdmin(permissions.BasePermission):
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and getattr(request.user, "role", "") == "admin")
+        return bool(
+            request.user and request.user.is_authenticated
+            and getattr(request.user, "role", "") == "admin"
+        )
 
 
 def dictfetchall(cursor):
@@ -47,11 +50,14 @@ class DashboardView(views.APIView):
                 "select count(*) from approval_svc.approvals_approvalchain "
                 "where status = 'rejected' and created_at >= date_trunc('month', now())"
             )
-            overdue = scalar("select count(*) from workflow_svc.workflows_workflow where sla_status = 'overdue'")
+            overdue = scalar(
+                "select count(*) from workflow_svc.workflows_workflow "
+                "where sla_status = 'overdue'"
+            )
             avg_days = scalar(
                 "select coalesce(avg(extract(epoch from (created_at - lag_created)) / 86400), 0) "
-                "from (select created_at, min(created_at) over (partition by workflow_id) as lag_created "
-                "from approval_svc.approvals_approvalrecord) records"
+                "from (select created_at, min(created_at) over (partition by workflow_id) "
+                "as lag_created from approval_svc.approvals_approvalrecord) records"
             )
             compliant = 100 if total == 0 else round(((total - overdue) / total) * 100, 2)
             return {
@@ -112,15 +118,19 @@ class ApproverPerformanceView(views.APIView):
             return {
                 "approvers": rows(
                     "select actor_id as approver_id, actor_name, count(*) as total_decisions, "
-                    "avg(extract(epoch from created_at - min_created_at) / 86400) as avg_response_time_days, "
-                    "round(100.0 * sum(case when action = 'rejected' then 1 else 0 end) / greatest(count(*), 1), 2) as rejection_rate "
-                    "from (select *, min(created_at) over (partition by workflow_id) as min_created_at "
-                    "from approval_svc.approvals_approvalrecord where action in ('approved', 'rejected', 'returned')) r "
+                    "avg(extract(epoch from created_at - min_created_at) / 86400) "
+                    "as avg_response_time_days, "
+                    "round(100.0 * sum(case when action = 'rejected' then 1 else 0 end) "
+                    "/ greatest(count(*), 1), 2) as rejection_rate "
+                    "from approval_svc.approvals_approvalrecord "
+                    "where action in ('approved', 'rejected', 'returned') "
                     "group by actor_id, actor_name order by total_decisions desc"
                 )
             }
 
-        return response.Response(AnalyticsService.cached_payload("analytics:approver-performance", compute))
+        return response.Response(
+            AnalyticsService.cached_payload("analytics:approver-performance", compute)
+        )
 
 
 class RejectionRatesView(views.APIView):
@@ -133,14 +143,17 @@ class RejectionRatesView(views.APIView):
                     "select coalesce(wt.name, w.approval_type, 'Unknown') as workflow_type, "
                     "count(*) as total, "
                     "sum(case when w.status = 'rejected' then 1 else 0 end) as rejected, "
-                    "round(100.0 * sum(case when w.status = 'rejected' then 1 else 0 end) / greatest(count(*), 1), 2) as rejection_rate "
+                    "round(100.0 * sum(case when w.status = 'rejected' then 1 else 0 end) "
+                    "/ greatest(count(*), 1), 2) as rejection_rate "
                     "from workflow_svc.workflows_workflow w "
                     "left join workflow_svc.workflows_workflowtype wt on wt.id = w.workflow_type_id "
                     "group by 1 order by rejection_rate desc"
                 )
             }
 
-        return response.Response(AnalyticsService.cached_payload("analytics:rejection_rates", compute))
+        return response.Response(
+            AnalyticsService.cached_payload("analytics:rejection_rates", compute)
+        )
 
 
 @api_view(["GET"])
