@@ -99,7 +99,8 @@ class WorkflowConfigUploadView(views.APIView):
                 seen_names.append(row["name"])
                 _, was_created = WorkflowType.objects.update_or_create(
                     name=row["name"],
-                    defaults={key: value for key, value in row.items() if key in WORKFLOW_TYPE_FIELDS and key != "name"},
+                    defaults={key: value for key, value in row.items(
+                    ) if key in WORKFLOW_TYPE_FIELDS and key != "name"},
                 )
                 if was_created:
                     created += 1
@@ -198,7 +199,8 @@ class WorkflowViewSet(viewsets.ModelViewSet):
                 if field in missing_fields:
                     missing_fields.remove(field)
         if missing_fields:
-            return response.Response({"detail": "Missing form fields", "fields": missing_fields}, status=status.HTTP_400_BAD_REQUEST)
+            return response.Response({"detail": "Missing form fields", "fields": missing_fields},
+                                     status=status.HTTP_400_BAD_REQUEST)
 
         document_labels = request.data.get("document_labels", "[]")
         if isinstance(document_labels, str):
@@ -216,7 +218,8 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         if workflow_type.required_docs and workflow_type.all_documents_required:
             missing_docs = [label for label in workflow_type.required_docs if label not in label_to_file]
             if missing_docs:
-                return response.Response({"detail": "Missing required documents", "documents": missing_docs}, status=status.HTTP_400_BAD_REQUEST)
+                return response.Response({"detail": "Missing required documents",
+                                         "documents": missing_docs}, status=status.HTTP_400_BAD_REQUEST)
         elif workflow_type.required_docs and not uploaded_required_docs:
             return response.Response(
                 {"detail": "At least one required document must be uploaded", "documents": workflow_type.required_docs},
@@ -259,7 +262,8 @@ class WorkflowViewSet(viewsets.ModelViewSet):
             workflow,
             getattr(request, "correlation_id", None) or str(uuid.uuid4()),
         )
-        return response.Response(WorkflowSerializer(workflow, context={"request": request}).data, status=status.HTTP_201_CREATED)
+        return response.Response(WorkflowSerializer(
+            workflow, context={"request": request}).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get"])
     def progress(self, request, pk=None):
@@ -292,7 +296,8 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     def appeal(self, request, pk=None):
         workflow = self.get_object()
         if workflow.created_by_id != request.user.id:
-            return response.Response({"detail": "Only the submitter can appeal this workflow."}, status=status.HTTP_403_FORBIDDEN)
+            return response.Response({"detail": "Only the submitter can appeal this workflow."},
+                                     status=status.HTTP_403_FORBIDDEN)
         if workflow.status not in {Workflow.Status.REJECTED, Workflow.Status.RETURNED}:
             return response.Response(
                 {"detail": "Appeals are only allowed for rejected or returned workflows."},
