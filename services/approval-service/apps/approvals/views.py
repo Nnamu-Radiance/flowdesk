@@ -84,8 +84,8 @@ class ApprovalDecisionView(views.APIView):
             has_annotated = bool(request.FILES.get("annotated_document"))
             if not has_comments and not has_annotated:
                 return response.Response(
-                    {"detail": "Feedback is required when rejecting or returning a workflow. Please provide comments or an annotated document."},
-                    status=status.HTTP_400_BAD_REQUEST,
+                    {"detail": ("Feedback is required when rejecting or returning a workflow. "
+                                "Please provide comments or an annotated document.")},
                 )
         try:
             result = ApprovalService.decision(
