@@ -1,10 +1,66 @@
 {% extends 'base.html' %}
+{% load static %}
 {% block title %}Admin Config - FlowDesk{% endblock %}
 {% block content %}
-<section class="space-y-6">
-  <h1 class="text-2xl font-bold">Admin Configuration</h1>
-  <article class="card">
-    <p class="text-gray-600">Manage users, roles, and platform settings from this page.</p>
-  </article>
+<section class="admin-config">
+  <header class="admin-hero">
+    <div>
+      <p class="text-sm text-blue-700 font-semibold">Welcome Admin, your control room is ready.</p>
+      <h1 class="text-2xl font-bold">Admin Configuration Dashboard</h1>
+      <p class="text-sm text-gray-600">Configure workflow types, approval steps, and CSV imports.</p>
+    </div>
+    <button id="configure-workflow" class="btn btn-primary" type="button">Configure Workflow</button>
+  </header>
+
+  <div class="admin-grid">
+    <article class="card">
+      <div class="card-header">
+        <h2 id="workflow-card-title" class="text-lg font-semibold">Workflow Types</h2>
+        <button id="new-workflow-type" class="btn btn-sm btn-secondary" type="button">New Type</button>
+      </div>
+      <form id="workflow-type-form" class="admin-inline-form hidden">
+        <input id="workflow-type-name" class="form-input" type="text" placeholder="Workflow type name" required>
+        <input id="workflow-type-sla" class="form-input" type="number" min="1" value="48" aria-label="SLA hours" required>
+        <button class="btn btn-primary" type="submit">Add</button>
+      </form>
+      <div id="workflow-types-list" class="workflow-type-list"></div>
+    </article>
+
+    <article class="card csv-config-card">
+      <div class="card-header">
+        <h2 class="text-lg font-semibold">Add CSV</h2>
+        <input id="workflow-csv-file" class="hidden" type="file" accept=".csv,text/csv">
+      </div>
+      <div id="csv-empty-state" class="csv-empty-state">
+        <p class="font-semibold">Upload a workflow CSV to preview it before importing.</p>
+        <p class="text-sm text-gray-600">Invalid files will show the required format in a popup.</p>
+        <button id="choose-workflow-csv" class="btn btn-secondary" type="button">Choose CSV</button>
+      </div>
+      <div id="csv-preview-panel" class="hidden">
+        <div id="csv-summary" class="csv-summary"></div>
+        <div id="csv-preview-list" class="csv-preview-list"></div>
+        <div class="csv-actions">
+          <button id="implement-csv" class="btn btn-primary" type="button">Implement</button>
+          <button id="cancel-csv" class="btn btn-secondary" type="button">Cancel</button>
+        </div>
+      </div>
+    </article>
+  </div>
 </section>
+
+<div id="csv-error-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="csv-error-title">
+  <section class="modal-card">
+    <header class="card-header">
+      <h2 id="csv-error-title" class="text-lg font-semibold">CSV format issue</h2>
+      <button id="close-csv-error" class="btn btn-sm btn-secondary" type="button">Close</button>
+    </header>
+    <div id="csv-error-list" class="csv-error-list"></div>
+    <p class="text-sm text-gray-600 mt-4">Required format:</p>
+    <pre class="csv-example">name,approval_type,description,deadline,priority,tags,metadata
+Laptop Purchase,Procurement,Approve laptop request,2026-06-01T17:00:00Z,2,finance;urgent,"{""stop_1"":""Manager"",""required_documents"":""invoice|memo""}"</pre>
+  </section>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script src="{% static 'js/admin_config.js' %}"></script>
 {% endblock %}

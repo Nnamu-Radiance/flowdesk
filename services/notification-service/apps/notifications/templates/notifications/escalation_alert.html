@@ -1,0 +1,5 @@
+<p>Hello,</p>
+<p>A workflow approval is overdue and has been escalated.</p>
+<p>Workflow ID: {{ workflow_id }}</p>
+{% if overdue_by_hours is not None %}<p>Overdue by: {{ overdue_by_hours }} hours</p>{% endif %}
+<p>FlowDesk</p>

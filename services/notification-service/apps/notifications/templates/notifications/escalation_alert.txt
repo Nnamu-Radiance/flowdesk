@@ -1,0 +1,7 @@
+Hello,
+
+A workflow approval is overdue and has been escalated.
+Workflow ID: {{ workflow_id }}
+{% if overdue_by_hours is not None %}Overdue by: {{ overdue_by_hours }} hours{% endif %}
+
+FlowDesk

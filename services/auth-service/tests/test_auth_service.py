@@ -20,6 +20,61 @@ def test_login_endpoint_exists(django_user_model):
 
 
 @pytest.mark.django_db
+def test_login_accepts_non_ictu_email(django_user_model):
+    django_user_model.objects.create_user(
+        username="radiance84",
+        email="nnamuradiance@gmail.com",
+        password="password123",
+        role="admin",
+    )
+    client = APIClient()
+
+    response = client.post(
+        reverse("auth-login"),
+        {"username": "nnamuradiance@gmail.com", "password": "password123"},
+        format="json",
+    )
+
+    assert response.status_code == 200
+    assert response.data["user"]["email"] == "nnamuradiance@gmail.com"
+    assert response.data["user"]["role"] == "admin"
+
+
+@pytest.mark.django_db
+def test_signup_accepts_non_ictu_email():
+    client = APIClient()
+
+    response = client.post(
+        reverse("auth-signup"),
+        {
+            "email": "new.user@gmail.com",
+            "password": "password123",
+            "first_name": "New",
+            "last_name": "User",
+        },
+        format="json",
+    )
+
+    assert response.status_code == 201
+    assert response.data["user"]["email"] == "new.user@gmail.com"
+    assert "access" in response.data
+
+
+@pytest.mark.django_db
+def test_magic_link_accepts_non_ictu_email(settings):
+    settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+    client = APIClient()
+
+    response = client.post(
+        reverse("auth-magic-request"),
+        {"email": "magic.user@gmail.com"},
+        format="json",
+    )
+
+    assert response.status_code == 202
+
+
+@pytest.mark.django_db
 def test_user_endpoints(django_user_model):
     admin = django_user_model.objects.create_user(username="admin_user", password="password", role="admin")
     user = django_user_model.objects.create_user(username="testuser", password="password", role="submitter")
@@ -49,7 +104,7 @@ def test_user_endpoints(django_user_model):
     }
     response = client.post(reverse("auth-users"), new_user_data)
     assert response.status_code == 201
-    assert django_user_model.objects.filter(username="newuser").exists()
+    assert django_user_model.objects.filter(email="new@example.com").exists()
 
     # Test Update Role
     response = client.patch(reverse("auth-user-role", kwargs={"pk": user.pk}), {"role": "approver"})
@@ -72,8 +127,8 @@ def test_jwt_local_authentication(django_user_model, monkeypatch, settings):
     from rest_framework_simplejwt.tokens import AccessToken
     from rest_framework.exceptions import AuthenticationFailed
 
-    # Ensure JWT secret is configured for shared validator
-    monkeypatch.setenv("JWT_SECRET_KEY", settings.SECRET_KEY)
+    # Keep the shared validator aligned with SimpleJWT's configured signer.
+    monkeypatch.setenv("JWT_SECRET_KEY", settings.SIMPLE_JWT["SIGNING_KEY"])
 
     user = django_user_model.objects.create_user(username="jwt_user", role="submitter")
     auth = JWTLocalAuthentication()
@@ -124,4 +179,3 @@ def test_permissions():
     p = IsSubmitter()
     assert p.has_permission(type("Req", (), {"user": submitter}), None) is True
     assert p.has_permission(type("Req", (), {"user": anon}), None) is False
-

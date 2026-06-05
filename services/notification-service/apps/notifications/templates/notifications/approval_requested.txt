@@ -1,0 +1,11 @@
+Hello,
+
+A {{ workflow_type_name|default:"workflow" }} request is awaiting your decision.
+
+Student: {{ student_name|default:"Unknown" }}
+Matricule: {{ student_matricule|default:"N/A" }}
+Step: {{ step_number }} of {{ total_steps }}
+Office: {{ role_display_name }}
+{% if deadline %}Deadline: {{ deadline }}{% endif %}
+
+FlowDesk

@@ -1,0 +1,6 @@
+Hello {{ student_name|default:"there" }},
+
+Your {{ workflow_type_name|default:"workflow" }} request has been received and is now in the approval process.
+{% if deadline %}Deadline: {{ deadline }}{% endif %}
+
+FlowDesk

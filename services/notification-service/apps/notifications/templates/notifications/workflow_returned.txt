@@ -1,0 +1,7 @@
+Hello,
+
+Changes were requested for your workflow.
+{% if comments %}Comment: {{ comments }}{% endif %}
+{% if annotated_document_url %}Annotated document: {{ annotated_document_url }}{% endif %}
+
+FlowDesk

@@ -1,0 +1,6 @@
+Hello,
+
+Your {{ workflow_type_name|default:"workflow" }} request has been approved.
+{% if final_comments %}Final comments: {{ final_comments }}{% endif %}
+
+FlowDesk

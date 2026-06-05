@@ -2,11 +2,12 @@ from rest_framework import permissions, response, status
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from apps.auth.serializers import UserSerializer
+from apps.auth.serializers import FlowDeskTokenObtainPairSerializer, UserSerializer
 
 
 class LoginView(TokenObtainPairView):
     permission_classes = [permissions.AllowAny]
+    serializer_class = FlowDeskTokenObtainPairSerializer
 
 
 class RefreshView(TokenRefreshView):

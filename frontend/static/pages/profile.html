@@ -1,0 +1,306 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Profile - FlowDesk</title>
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+</head>
+<body>
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/notifications.js"></script>
+  <script src="/static/js/shell.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        let currentUser;
+        const init = await FlowDeskShell.initPage({
+          activePage: 'profile',
+          title: 'Profile',
+          allowedRoles: ['submitter', 'approver', 'admin'],
+          options: {
+            hideNewRequest: true,
+            topbarAction: '<button id="save-profile" class="btn btn-primary btn-sm" type="button">Save</button>'
+          }
+        });
+        currentUser = init.user;
+        const root = init.root;
+
+        // Faculty → Majors mapping
+        // BMS is still in development — single placeholder option
+        const faculties = {
+          ICT: [
+            'Software Engineering',
+            'Computer Science',
+            'ISN',
+            'ICT',
+            'Cyber Security',
+            'Energy Resources',
+          ],
+          BMS: ['Still in development'],
+        };
+
+        root.innerHTML = `
+          <div style="display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;align-items:start">
+            <section class="card" style="text-align:center">
+              <div class="u-ava" style="width:56px;height:56px;margin:0 auto 10px;font-size:18px">
+                ${FlowDeskShell.initials(currentUser)}
+              </div>
+              <strong style="font-size:12px;font-weight:500">
+                ${FlowDeskShell.esc(FlowDeskShell.fullName(currentUser))}
+              </strong>
+              <div style="margin-top:8px">
+                <span class="pill pill-blue">${FlowDeskShell.esc(currentUser.display_role || currentUser.role)}</span>
+              </div>
+              <div class="mono" style="margin-top:10px;background:#f8fafc;padding:6px;border-radius:4px;font-size:10px">
+                ${FlowDeskShell.esc(currentUser.matricule || 'No matricule')}
+              </div>
+              <p class="text-gray-600" style="font-size:10px;margin-top:8px">
+                These fields pre-fill all workflow request forms
+              </p>
+            </section>
+
+            <section class="card">
+              <div class="card-hd"><h2 class="card-title">Identity &amp; academic info</h2></div>
+              <div class="form-row">
+                ${inp('Full name',    'full_name',     FlowDeskShell.fullName(currentUser))}
+                ${inp('Matricule',    'matricule',     currentUser.matricule    || '')}
+                ${inp('Email',        'email',         currentUser.email        || '', 'email', true)}
+                ${inp('Phone',        'phone_number',  currentUser.phone_number || '')}
+
+                <div class="form-group">
+                  <label class="form-label">Faculty</label>
+                  <select id="faculty" class="form-select">
+                    ${Object.keys(faculties).map((f) =>
+                      `<option value="${f}" ${f === currentUser.faculty ? 'selected' : ''}>${f}</option>`
+                    ).join('')}
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label class="form-label">Major</label>
+                  <select id="major" class="form-select"></select>
+                </div>
+              </div>
+
+              <div style="margin-top:12px;background:#f8fafc;border-radius:6px;padding:10px;color:#64748b;font-size:11px">
+                Level and semester are selected per request — they may vary each time you submit.
+              </div>
+            </section>
+
+            <section class="card profile-signature-card">
+              <div class="card-hd"><h2 class="card-title">Signature &amp; Stamp</h2></div>
+              <div class="signature-grid">
+                <div class="form-group">
+                  <label class="form-label">Digital Signature</label>
+                  <p class="text-gray-500 text-xs">Used to validate approved documents. Draw directly or upload a PNG/JPG.</p>
+                  <div style="display:flex;gap:6px;margin-bottom:8px">
+                    <button id="sig-tab-upload" class="btn btn-sm btn-primary" type="button">Upload</button>
+                    <button id="sig-tab-draw"   class="btn btn-sm btn-secondary" type="button">Draw</button>
+                  </div>
+                  <div id="sig-upload-panel">
+                    <button id="signature-preview" class="signature-preview signature-upload-box" type="button"></button>
+                    <input id="signature_image" class="hidden" type="file" accept="image/png,image/jpeg">
+                  </div>
+                  <div id="sig-draw-panel" style="display:none">
+                    <canvas id="sig-canvas" width="300" height="120"
+                      style="border:1px dashed #cbd5e1;border-radius:4px;background:#fff;touch-action:none;display:block"></canvas>
+                    <div style="display:flex;gap:6px;margin-top:6px">
+                      <button id="sig-clear"    class="btn btn-sm btn-secondary" type="button">Clear</button>
+                      <button id="sig-use"      class="btn btn-sm btn-primary"   type="button">Use as signature</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Official Stamp</label>
+                  <p class="text-gray-500 text-xs">Optional. Upload your departmental stamp for document validation.</p>
+                  <button id="stamp-preview" class="signature-preview signature-upload-box" type="button"></button>
+                  <input id="stamp_image" class="hidden" type="file" accept="image/png,image/jpeg">
+                </div>
+              </div>
+            </section>
+          </div>
+        `;
+
+        function inp(label, id, value, type = 'text', readonly = false) {
+          return `<div class="form-group">
+            <label class="form-label">${label}</label>
+            <input id="${id}" class="form-input" type="${type}"
+              value="${FlowDeskShell.esc(value)}"
+              ${readonly ? 'readonly style="background:#f8fafc;color:#64748b"' : ''}>
+          </div>`;
+        }
+
+        function renderMajors() {
+          const selectedFaculty = document.getElementById('faculty').value;
+          const majors = faculties[selectedFaculty] || [];
+          const isBMS = selectedFaculty === 'BMS';
+
+          document.getElementById('major').innerHTML = majors.map((m) =>
+            `<option value="${m}" ${m === currentUser.department ? 'selected' : ''}>${m}</option>`
+          ).join('');
+
+          // Disable the select for BMS since it's not ready yet
+          document.getElementById('major').disabled = isBMS;
+
+          if (isBMS) {
+            document.getElementById('major').style.color = '#94a3b8';
+          } else {
+            document.getElementById('major').style.color = '';
+          }
+        }
+
+        document.getElementById('faculty').addEventListener('change', renderMajors);
+        renderMajors();
+        renderSignaturePreview('signature', currentUser.signature_image);
+        renderSignaturePreview('stamp', currentUser.stamp_image);
+
+        document.getElementById('signature-preview').addEventListener('click', () => document.getElementById('signature_image').click());
+        document.getElementById('stamp-preview').addEventListener('click', () => document.getElementById('stamp_image').click());
+        document.getElementById('signature_image').addEventListener('change', (event) => uploadSignatureAsset('signature_image', event.target.files[0]));
+        document.getElementById('stamp_image').addEventListener('change', (event) => uploadSignatureAsset('stamp_image', event.target.files[0]));
+
+        document.getElementById('save-profile').addEventListener('click', async () => {
+          try {
+            const faculty = document.getElementById('faculty').value;
+            const major   = document.getElementById('major').value;
+
+            // Don't save a placeholder value for BMS
+            const payload = {
+              full_name:    document.getElementById('full_name').value,
+              matricule:    document.getElementById('matricule').value,
+              phone_number: document.getElementById('phone_number').value,
+              faculty:      faculty,
+              department:   faculty === 'BMS' ? '' : major,
+            };
+
+            const saved = await api.patch('/api/auth/me/', payload);
+            AuthManager.setTokens({
+              access:  AuthManager.getAccessToken(),
+              refresh: AuthManager.getRefreshToken(),
+              user:    saved,
+            });
+            showToast('Profile saved.', 'success');
+          } catch (error) {
+            showToast(error.message, 'error');
+          }
+        });
+
+        function renderSignaturePreview(kind, url) {
+          const target = document.getElementById(`${kind}-preview`);
+          if (!target) return;
+          target.innerHTML = url
+            ? `<img src="${FlowDeskShell.esc(url)}" alt="${kind}">`
+            : `<span><i class="ti ti-upload" aria-hidden="true"></i> Click to upload</span>`;
+        }
+
+        async function uploadSignatureAsset(field, file) {
+          if (!file) return;
+          if (file.size > 200 * 1024) {
+            showToast('Image must be under 200KB.', 'error');
+            return;
+          }
+          try {
+            const kind = field === 'signature_image' ? 'signature' : 'stamp';
+            const preview = document.getElementById(`${kind}-preview`);
+            preview.innerHTML = '<span><i class="ti ti-loader" aria-hidden="true"></i> Uploading...</span>';
+            const fd = new FormData();
+            fd.append(field, file);
+            const saved = await api.request('PATCH', '/api/auth/profile/signature-stamp/', fd, true);
+            currentUser = saved;
+            AuthManager.setTokens({
+              access: AuthManager.getAccessToken(),
+              refresh: AuthManager.getRefreshToken(),
+              user: saved,
+            });
+            renderSignaturePreview('signature', saved.signature_image);
+            renderSignaturePreview('stamp', saved.stamp_image);
+            showToast('Signature settings updated.', 'success');
+          } catch (error) {
+            showToast(error.message, 'error');
+          }
+        }
+
+        // Signature tab switching
+        document.getElementById('sig-tab-upload').addEventListener('click', () => {
+          document.getElementById('sig-upload-panel').style.display = '';
+          document.getElementById('sig-draw-panel').style.display = 'none';
+          document.getElementById('sig-tab-upload').className = 'btn btn-sm btn-primary';
+          document.getElementById('sig-tab-draw').className = 'btn btn-sm btn-secondary';
+        });
+        document.getElementById('sig-tab-draw').addEventListener('click', () => {
+          document.getElementById('sig-upload-panel').style.display = 'none';
+          document.getElementById('sig-draw-panel').style.display = '';
+          document.getElementById('sig-tab-draw').className = 'btn btn-sm btn-primary';
+          document.getElementById('sig-tab-upload').className = 'btn btn-sm btn-secondary';
+        });
+
+        // Canvas signature pad
+        (function initSignaturePad() {
+          const canvas = document.getElementById('sig-canvas');
+          const ctx = canvas.getContext('2d');
+          let drawing = false;
+          let lastX = 0;
+          let lastY = 0;
+
+          function pos(e) {
+            const rect = canvas.getBoundingClientRect();
+            const src = e.touches ? e.touches[0] : e;
+            return [src.clientX - rect.left, src.clientY - rect.top];
+          }
+
+          function startDraw(e) {
+            drawing = true;
+            [lastX, lastY] = pos(e);
+          }
+          function draw(e) {
+            if (!drawing) return;
+            if (e.cancelable) e.preventDefault();
+            const [x, y] = pos(e);
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            ctx.strokeStyle = '#111827';
+            ctx.lineWidth = 2;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+            [lastX, lastY] = [x, y];
+          }
+          function stopDraw() { drawing = false; }
+
+          canvas.addEventListener('mousedown',  startDraw);
+          canvas.addEventListener('mousemove',  draw);
+          canvas.addEventListener('mouseup',    stopDraw);
+          canvas.addEventListener('mouseleave', stopDraw);
+          canvas.addEventListener('touchstart', startDraw, { passive: true });
+          canvas.addEventListener('touchmove',  draw,      { passive: false });
+          canvas.addEventListener('touchend',   stopDraw);
+
+          document.getElementById('sig-clear').addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          });
+
+          document.getElementById('sig-use').addEventListener('click', () => {
+            canvas.toBlob((blob) => {
+              if (!blob) return;
+              const file = new File([blob], 'signature_drawn.png', { type: 'image/png' });
+              // Switch back to upload tab to show the preview
+              document.getElementById('sig-tab-upload').click();
+              uploadSignatureAsset('signature_image', file);
+            }, 'image/png');
+          });
+        })();
+
+      } catch (error) {
+        if (error.message !== 'Not authenticated' && error.message !== 'Access denied') {
+          showToast(error.message, 'error');
+        }
+      }
+    });
+  </script>
+</body>
+</html>

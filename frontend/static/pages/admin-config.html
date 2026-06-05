@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Workflow configuration - FlowDesk</title>
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+</head>
+<body>
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/notifications.js"></script>
+  <script src="/static/js/shell.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const { root } = await FlowDeskShell.initPage({
+          activePage: 'admin-config',
+          title: 'Workflow configuration',
+          allowedRoles: ['admin'],
+          options: { hideNewRequest: true, topbarAction: '<button id="upload-top" class="btn btn-primary btn-sm" type="button"><i class="ti ti-upload" aria-hidden="true"></i> Upload new CSV</button>' }
+        });
+        let selectedFile = null;
+        let previewRows = [];
+        root.innerHTML = `
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start">
+            <section class="card">
+              <label id="csv-zone" class="upload-zone">
+                <i class="ti ti-file-spreadsheet" style="font-size:20px" aria-hidden="true"></i>
+                <strong>Drop your workflow config CSV here</strong>
+                <span>or click to browse</span>
+                <span class="text-gray-500" style="font-size:10px">Required columns: name, approval_type, description, deadline, priority, tags, metadata</span>
+                <input id="csv-file" class="hidden" type="file" accept=".csv,text/csv">
+              </label>
+              <div id="banner" style="margin-top:10px"></div>
+              <div id="csv-preview" class="hidden" style="margin-top:12px"></div>
+            </section>
+            <section class="card">
+              <div class="card-hd"><h2 class="card-title">Registered workflow types</h2></div>
+              <div id="registered-types">Loading workflow types...</div>
+            </section>
+          </div>
+        `;
+        document.getElementById('upload-top').addEventListener('click', () => document.getElementById('csv-file').click());
+        document.getElementById('csv-file').addEventListener('change', async (event) => {
+          selectedFile = event.target.files[0];
+          if (!selectedFile) return;
+          previewRows = parseCSV(await selectedFile.text());
+          renderPreview();
+        });
+
+        function parseCSV(text) {
+          const rows = [];
+          let row = [], cell = '', quoted = false;
+          for (let i = 0; i < text.length; i += 1) {
+            const char = text[i], next = text[i + 1];
+            if (char === '"' && quoted && next === '"') { cell += '"'; i += 1; continue; }
+            if (char === '"') { quoted = !quoted; continue; }
+            if (char === ',' && !quoted) { row.push(cell); cell = ''; continue; }
+            if ((char === '\n' || char === '\r') && !quoted) {
+              if (char === '\r' && next === '\n') i += 1;
+              row.push(cell); if (row.some((v) => v.trim())) rows.push(row); row = []; cell = ''; continue;
+            }
+            cell += char;
+          }
+          row.push(cell); if (row.some((v) => v.trim())) rows.push(row);
+          const headers = rows.shift()?.map((h) => h.trim()) || [];
+          return rows.map((values) => Object.fromEntries(headers.map((h, index) => [h, values[index] || ''])));
+        }
+
+        function metadata(row) {
+          try { return JSON.parse(row.metadata || '{}'); } catch (error) { return {}; }
+        }
+
+        function docsFrom(row) {
+          const docs = String(metadata(row).required_documents || '').trim();
+          if (!docs || docs.toLowerCase() === 'none') return [];
+          return docs.split('|').map((doc) => doc.trim()).filter(Boolean);
+        }
+
+        function stopsFromMeta(meta) {
+          return Object.keys(meta).filter((key) => /^stop_\d+$/.test(key)).sort((a, b) => Number(a.split('_')[1]) - Number(b.split('_')[1])).map((key) => meta[key]);
+        }
+
+        function renderPreview() {
+          const withDocs = previewRows.filter((row) => docsFrom(row).length).length;
+          document.getElementById('csv-preview').classList.remove('hidden');
+          document.getElementById('csv-preview').innerHTML = `
+            <div class="card-hd"><h2 class="card-title">CSV preview</h2></div>
+            <table class="tbl"><thead><tr><th>Name</th><th>Type</th><th>Stops</th><th>Required Docs</th><th>All Docs Required</th><th>Priority</th></tr></thead>
+            <tbody>${previewRows.slice(0, 10).map((row) => {
+              const meta = metadata(row);
+              const docs = docsFrom(row);
+              return `<tr><td>${FlowDeskShell.esc(row.name)}</td><td>${FlowDeskShell.esc(row.approval_type)}</td><td>${stopsFromMeta(meta).length}</td><td>${docs.length ? docs.map(FlowDeskShell.titleCase).join(', ') : '<span class="pill pill-green">None</span>'}</td><td>${meta.all_documents_required !== false ? 'Yes' : 'No'}</td><td>${FlowDeskShell.esc(row.priority || 2)}</td></tr>`;
+            }).join('')}</tbody></table>
+            <p class="text-gray-600" style="font-size:11px">${previewRows.length} workflow types detected - ${withDocs} with required documents</p>
+            <div style="display:flex;gap:8px;justify-content:flex-end"><button id="confirm-upload" class="btn btn-primary btn-sm" type="button">Confirm upload</button><button id="cancel-upload" class="btn btn-secondary btn-sm" type="button">Cancel</button></div>
+          `;
+          document.getElementById('confirm-upload').addEventListener('click', upload);
+          document.getElementById('cancel-upload').addEventListener('click', reset);
+        }
+
+        function banner(message, type) {
+          document.getElementById('banner').innerHTML = message ? `<div class="banner ${type}">${FlowDeskShell.esc(message)}</div>` : '';
+        }
+
+        function reset() {
+          selectedFile = null;
+          previewRows = [];
+          document.getElementById('csv-file').value = '';
+          document.getElementById('csv-preview').classList.add('hidden');
+          document.getElementById('csv-preview').innerHTML = '';
+        }
+
+        async function upload() {
+          if (!selectedFile) return;
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+          try {
+            const result = await WorkflowConfigAPI.upload(formData);
+            if (result.errors?.length) {
+              banner(result.errors.map((item) => item.error || item).join(' | '), 'error');
+              return;
+            }
+            banner(`Configuration uploaded - ${(result.created || 0) + (result.updated || 0)} workflow types registered. All services have been notified.`, 'success');
+            reset();
+            loadRegistered();
+          } catch (error) {
+            banner(error.message, 'error');
+          }
+        }
+
+        function iconFor(type) {
+          const raw = String(type || '').toLowerCase();
+          if (raw.includes('finance')) return ['ti-credit-card', '#dcfce7', '#15803d'];
+          if (raw.includes('admin')) return ['ti-briefcase', '#fce7f3', '#be185d'];
+          return ['ti-school', '#dbeafe', '#1e40af'];
+        }
+
+        async function loadRegistered() {
+          const items = FlowDeskShell.results(await WorkflowConfigAPI.list().catch(() => []));
+          document.getElementById('registered-types').innerHTML = items.length ? `<div style="display:grid;gap:10px">${items.map((item) => {
+            const [icon, bg, color] = iconFor(item.approval_type || item.department);
+            const stops = item.approval_chain || [];
+            return `<div style="display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:center;border-bottom:1px solid #f1f5f9;padding-bottom:9px">
+              <span style="width:28px;height:28px;border-radius:6px;background:${bg};color:${color};display:grid;place-items:center"><i class="ti ${icon}" aria-hidden="true"></i></span>
+              <span><strong style="font-size:11px;font-weight:500">${FlowDeskShell.esc(item.name)}</strong><span class="block text-gray-500" style="font-size:10px">${FlowDeskShell.esc(stops.join(' -> ') || 'No stops')} · ${stops.length} stops</span><span class="block ${item.required_docs?.length ? 'text-gray-700' : 'text-gray-500'}" style="font-size:10px">${item.required_docs?.length ? `${item.required_docs.length} documents required` : 'No documents required'}</span></span>
+              <span class="pill pill-blue">${FlowDeskShell.esc(item.approval_type || item.department || 'General')}</span>
+            </div>`;
+          }).join('')}</div>` : `<div style="display:grid;place-items:center;gap:7px;padding:38px;text-align:center;color:#64748b"><i class="ti ti-file-spreadsheet" style="font-size:24px" aria-hidden="true"></i><strong style="color:#111827;font-size:12px">No workflow types configured</strong><span style="font-size:11px">Upload a CSV file to register workflow types</span></div>`;
+        }
+
+        await loadRegistered();
+      } catch (error) {
+        if (error.message !== 'Not authenticated' && error.message !== 'Access denied') showToast(error.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

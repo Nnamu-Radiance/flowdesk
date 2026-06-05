@@ -6,8 +6,10 @@
   </div>
 
   <div class="flex items-center gap-4">
-    {% include 'includes/notifications_badge.html' %}
-    <span class="text-sm text-gray-700">{{ request.user.get_full_name|default:request.user.username }}</span>
+    {% if request.path != '/admin/config/' %}
+      {% include 'includes/notifications_badge.html' %}
+      <span class="text-sm text-gray-700">{{ request.user.get_full_name|default:request.user.username }}</span>
+    {% endif %}
     <button onclick="AuthManager.logout()" class="btn btn-sm btn-secondary">Logout</button>
   </div>
 </nav>

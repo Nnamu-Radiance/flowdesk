@@ -35,27 +35,23 @@ def process_workflow_document(self, workflow_id: int):
 
 @shared_task(bind=True, base=RetryTask, time_limit=300)
 def process_csv_bulk(self, file_content: str, user_id: int):
-    from apps.approvals.models import ApprovalType
     from apps.auth.models import CustomUser
+    from apps.workflows.csv_import import parse_workflow_csv
     from apps.workflows.models import Workflow
 
     user = CustomUser.objects.get(id=user_id)
-    rows = csv.DictReader(StringIO(file_content))
+    result = parse_workflow_csv(file_content)
     created = 0
-    errors = []
-    approval_type = ApprovalType.objects.first()
-    for idx, row in enumerate(rows, start=2):
-        try:
-            Workflow.objects.create(
-                name=row["name"],
-                description=row.get("description", ""),
-                created_by=user,
-                approval_type=approval_type,
-            )
-            created += 1
-        except Exception as exc:
-            errors.append(f"Row {idx}: {exc}")
-    return {"status": "complete", "created": created, "errors": errors[:10]}
+
+    for row in result.valid_rows:
+        Workflow.objects.create(created_by=user, **row)
+        created += 1
+
+    return {
+        "status": "complete",
+        "created": created,
+        "errors": result.errors[:20],
+    }
 
 
 @shared_task(bind=True, base=RetryTask)

@@ -1,0 +1,6 @@
+Hello,
+
+A workflow assigned to you has reached the {{ level }} SLA warning threshold.
+{% if deadline %}Deadline: {{ deadline }}{% endif %}
+
+FlowDesk

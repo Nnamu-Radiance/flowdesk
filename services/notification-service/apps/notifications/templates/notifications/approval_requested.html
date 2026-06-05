@@ -1,0 +1,10 @@
+<p>Hello,</p>
+<p>A {{ workflow_type_name|default:"workflow" }} request is awaiting your decision.</p>
+<ul>
+  <li>Student: {{ student_name|default:"Unknown" }}</li>
+  <li>Matricule: {{ student_matricule|default:"N/A" }}</li>
+  <li>Step: {{ step_number }} of {{ total_steps }}</li>
+  <li>Office: {{ role_display_name }}</li>
+</ul>
+{% if deadline %}<p>Deadline: {{ deadline }}</p>{% endif %}
+<p>FlowDesk</p>
