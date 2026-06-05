@@ -28,7 +28,6 @@ from apps.auth.serializers import (
     MagicLinkRequestSerializer,
     RoleUpdateSerializer,
     SelfProfileSerializer,
-    SignatureStampUploadSerializer,
     SignupSerializer,
     UserSerializer,
     validate_email_address,
