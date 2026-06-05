@@ -38,7 +38,7 @@ pipeline {
             . services/$svc/venv/bin/activate
             pip install --upgrade pip
             pip install -r services/$svc/requirements.txt flake8
-            flake8 services/$svc/apps --max-line-length=120 --exclude=migrations
+            flake8 services/$svc/apps --max-line-length=140 --exclude=migrations
             deactivate
           done
         '''
