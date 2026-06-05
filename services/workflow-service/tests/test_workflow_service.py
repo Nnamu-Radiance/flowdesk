@@ -57,18 +57,90 @@ def test_workflow_submit(api_client):
         assert workflow.status == "submitted"
         mock_publish.assert_called_once()
 
+@pytest.mark.django_db
+def test_csv_dry_run_requires_name_header(api_client):
+    from io import BytesIO
+
+    csv_file = BytesIO(b"description\nMissing name\n")
+    csv_file.name = "bad.csv"
+
+    response = api_client.post(
+        "/api/workflows/csv-dry-run/",
+        {"file": csv_file},
+        format="multipart",
+    )
+
+    assert response.status_code == 200
+    assert response.data["valid_rows"] == 0
+    assert response.data["invalid_rows"] == 1
+    assert "Missing required columns" in response.data["errors"][0]["error"]
+
 
 @pytest.mark.django_db
 def test_csv_dry_run(api_client):
     from io import BytesIO
-    csv_content = b"name,description\nWF1,Desc1\nWF2,Desc2"
+
+    csv_content = (
+        b"name,approval_type,description,deadline,priority,tags,metadata\n"
+        b"WF1,Procurement,Desc1,,1,urgent,\"{}\"\n"
+        b"WF2,Legal,Desc2,,2,policy,\"{}\"\n"
+    )
     csv_file = BytesIO(csv_content)
     csv_file.name = "test.csv"
 
-    response = api_client.post("/api/workflows/csv-dry-run/", {"file": csv_file}, format="multipart")
+    response = api_client.post(
+        "/api/workflows/csv-dry-run/",
+        {"file": csv_file},
+        format="multipart",
+    )
+
     assert response.status_code == 200
     assert response.data["valid_rows"] == 2
-    assert "job_id" in response.data
+    assert response.data["invalid_rows"] == 0
+    assert response.data["errors"] == []
+    assert len(response.data["preview"]) == 2
+
+
+@pytest.mark.django_db
+def test_csv_dry_run_extracts_stops_and_document_requirements(api_client):
+    from io import BytesIO
+
+    csv_content = (
+        b"name,approval_type,description,deadline,priority,tags,metadata\n"
+        b"Academic Clearance,Registrar,Clearance,,1,student,"
+        b"\"{"
+        b"\"\"stop_2\"\": \"\"Registrar\"\", "
+        b"\"\"stop_1\"\": \"\"Faculty Scientific Council\"\", "
+        b"\"\"output\"\": \"\"Clearance issued\"\", "
+        b"\"\"required_documents\"\": \"\"birth_certificate|custom_letter\"\", "
+        b"\"\"all_documents_required\"\": true"
+        b"}\"\n"
+    )
+    csv_file = BytesIO(csv_content)
+    csv_file.name = "university_workflows.csv"
+
+    response = api_client.post(
+        "/api/workflows/csv-dry-run/",
+        {"file": csv_file},
+        format="multipart",
+    )
+
+    assert response.status_code == 200
+    preview = response.data["preview"][0]
+    assert preview["approval_stops"] == ["Faculty Scientific Council", "Registrar"]
+    assert preview["all_documents_required"] is True
+    assert preview["document_requirements"] == [
+        {
+            "document_slug": "birth_certificate",
+            "label": "Birth Certificate",
+            "is_required": True,
+        },
+        {
+            "document_slug": "custom_letter",
+            "label": "Custom Letter",
+            "is_required": True,
+        },
+    ]
 
 
 @pytest.mark.django_db
@@ -104,7 +176,146 @@ def test_process_document_task():
 @pytest.mark.django_db
 def test_process_csv_bulk_task():
     from apps.workflows.tasks import process_csv_bulk
-    csv_text = "name,description\nWF1,D1\nWF2,D2"
+    from apps.workflows.models import ApprovalStop
+
+    csv_text = (
+        "name,approval_type,description,metadata\n"
+        "WF1,Procurement,D1,\"{\"\"stop_1\"\": \"\"Supervisor\"\"}\"\n"
+        "WF2,Legal,D2,\"{\"\"stop_1\"\": \"\"Dean\"\"}\""
+    )
     result = process_csv_bulk(csv_text, 1)
+
+    assert result["status"] == "complete"
     assert result["created"] == 2
+    assert result["errors"] == []
     assert Workflow.objects.filter(created_by_id=1).count() == 2
+    assert list(ApprovalStop.objects.values_list("name", flat=True)) == ["Supervisor", "Dean"]
+
+
+@pytest.mark.django_db
+def test_process_csv_bulk_persists_document_requirements_and_stops():
+    from apps.workflows.models import WorkflowDocumentRequirement
+    from apps.workflows.tasks import process_csv_bulk
+
+    csv_text = (
+        "name,approval_type,description,metadata\n"
+        "Academic Clearance,Registrar,Clearance,"
+        "\"{\"\"stop_2\"\": \"\"Registrar\"\", "
+        "\"\"stop_1\"\": \"\"Faculty Scientific Council\"\", "
+        "\"\"required_documents\"\": \"\"birth_certificate|authentication_payment_receipt\"\", "
+        "\"\"all_documents_required\"\": true}\""
+    )
+
+    result = process_csv_bulk(csv_text, 1)
+
+    assert result["created"] == 1
+    workflow = Workflow.objects.get(name="Academic Clearance")
+    assert workflow.all_documents_required is True
+    assert list(workflow.approval_stops.values_list("order", "name")) == [
+        (1, "Faculty Scientific Council"),
+        (2, "Registrar"),
+    ]
+    assert list(
+        WorkflowDocumentRequirement.objects.values_list("document_slug", "label")
+    ) == [
+        ("birth_certificate", "Birth Certificate"),
+        ("authentication_payment_receipt", "Authentication Payment Receipt"),
+    ]
+
+
+@pytest.mark.django_db
+def test_document_gate_requires_verified_uploads():
+    from django.contrib.auth import get_user_model
+    from django.core.exceptions import ValidationError
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.workflows.models import (
+        ApprovalStop,
+        WorkflowDocumentRequirement,
+        WorkflowDocumentUpload,
+    )
+    from apps.workflows.services import check_document_completeness
+
+    user = get_user_model().objects.create_user(username="student")
+    workflow = Workflow.objects.create(
+        name="Academic Clearance",
+        created_by_id=user.id,
+        all_documents_required=True,
+    )
+    requirement = WorkflowDocumentRequirement.objects.create(
+        workflow=workflow,
+        document_slug="birth_certificate",
+    )
+    stop = ApprovalStop.objects.create(workflow=workflow, name="Registrar", order=1)
+
+    complete, missing = check_document_completeness(workflow)
+    assert complete is False
+    assert missing == ["Birth Certificate"]
+
+    stop.status = "in_review"
+    with pytest.raises(ValidationError, match="Cannot process: missing required documents"):
+        stop.save()
+
+    WorkflowDocumentUpload.objects.create(
+        workflow_instance=workflow,
+        requirement=requirement,
+        uploaded_by=user,
+        file=SimpleUploadedFile("birth.pdf", b"test"),
+        verified=True,
+    )
+
+    complete, missing = check_document_completeness(workflow)
+    assert complete is True
+    assert missing == []
+
+    stop.status = "in_review"
+    stop.save()
+    assert stop.started_at is not None
+
+
+@pytest.mark.django_db
+def test_workflow_serializer_returns_ui_hints():
+    from django.contrib.auth import get_user_model
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from apps.workflows.models import (
+        ApprovalStop,
+        WorkflowDocumentRequirement,
+        WorkflowDocumentUpload,
+    )
+    from apps.workflows.serializers import WorkflowSerializer
+
+    user = get_user_model().objects.create_user(username="student")
+    workflow = Workflow.objects.create(
+        name="Internship Placement Agreement",
+        created_by_id=user.id,
+        metadata={"output": "Agreement ready for pickup"},
+        all_documents_required=True,
+    )
+    ApprovalStop.objects.create(workflow=workflow, name="Admin Assistant", order=1)
+    requirement = WorkflowDocumentRequirement.objects.create(
+        workflow=workflow,
+        document_slug="transcript",
+    )
+    WorkflowDocumentUpload.objects.create(
+        workflow_instance=workflow,
+        requirement=requirement,
+        uploaded_by=user,
+        file=SimpleUploadedFile("transcript.pdf", b"test"),
+    )
+
+    data = WorkflowSerializer(workflow).data
+
+    assert data["approval_stops"][0]["name"] == "Admin Assistant"
+    assert data["required_documents"] == [
+        {
+            "id": requirement.id,
+            "document_slug": "transcript",
+            "label": "Academic Transcript",
+            "is_required": True,
+            "uploaded": True,
+            "verified": False,
+        }
+    ]
+    assert data["ready_to_submit"] is True
+    assert data["output"] == "Agreement ready for pickup"

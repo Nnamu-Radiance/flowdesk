@@ -1,0 +1,6 @@
+Hello,
+
+Your {{ workflow_type_name|default:"workflow" }} request was rejected.
+{% if final_comments %}Reason: {{ final_comments }}{% endif %}
+
+FlowDesk

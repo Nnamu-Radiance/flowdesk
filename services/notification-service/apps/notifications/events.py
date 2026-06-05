@@ -9,6 +9,10 @@ def handle_approval_decision(event: dict):
     return handle_event.delay(event)
 
 
+def handle_approval_returned(event: dict):
+    return handle_event.delay(event)
+
+
 def handle_sla_warning(event: dict):
     return handle_event.delay(event)
 

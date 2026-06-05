@@ -5,11 +5,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}FlowDesk{% endblock %}</title>
+  <link rel="icon" href="{% static 'images/logo.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/base.css' %}">
   <link rel="stylesheet" href="{% static 'css/animations.css' %}">
   {% block extra_css %}{% endblock %}
 </head>
-<body class="bg-gray-50 text-gray-900">
+<body class="bg-gray-50 text-gray-900 {% if request.path == '/login/' %}login-page{% endif %} {% if request.path == '/admin/config/' %}admin-config-page{% endif %}">
   {% include 'includes/navbar.html' %}
 
   <div class="flex min-h-screen">
@@ -25,6 +26,12 @@
   <script src="{% static 'js/utils.js' %}"></script>
   <script src="{% static 'js/auth.js' %}"></script>
   <script src="{% static 'js/api.js' %}"></script>
+  <script>
+    AuthManager.enforcePageAccess();
+    document.querySelectorAll('[data-admin-only]').forEach((element) => {
+      element.classList.toggle('hidden', !AuthManager.isAdmin());
+    });
+  </script>
   <script src="{% static 'js/notifications.js' %}"></script>
   {% block extra_js %}{% endblock %}
 

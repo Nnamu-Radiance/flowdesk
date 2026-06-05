@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>New request - FlowDesk</title>
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+</head>
+<body>
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/notifications.js"></script>
+  <script src="/static/js/shell.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const { user, root } = await FlowDeskShell.initPage({ activePage: 'new-request', title: 'New request', allowedRoles: ['submitter'], options: { hideNewRequest: true } });
+        const state = { user, types: [], selected: null, files: {} };
+        root.innerHTML = `
+          <div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start">
+            <section class="card">
+              <div class="card-hd"><h2 class="card-title">Request details</h2></div>
+              <form id="request-form">
+                <div class="form-group">
+                  <label class="form-label">Request type</label>
+                  <select id="workflow-type" class="form-select" required><option value="">Loading workflow types...</option></select>
+                  <p id="type-description" class="text-gray-600" style="font-size:11px;margin:6px 0 0"></p>
+                </div>
+                <div id="supervisor-wrap" class="form-group hidden">
+                  <label class="form-label">Supervisor</label>
+                  <select id="supervisor" class="form-select"></select>
+                </div>
+                <div class="card-hd" style="margin-top:14px"><h2 class="card-title">Your information</h2></div>
+                <div class="form-row">
+                  ${readonly('Full name', 'full_name', FlowDeskShell.fullName(user))}
+                  ${readonly('Matricule', 'matricule', user.matricule || '')}
+                  ${readonly('Faculty', 'faculty', user.faculty || '')}
+                  ${readonly('Department', 'department', user.department || '')}
+                </div>
+                <div class="form-row" style="margin-top:10px">
+                  <div class="form-group"><label class="form-label">Level</label><select id="level" class="form-select">${['Level 1','Level 2','Level 3','Level 4','Level 5','Masters','PhD'].map((v) => `<option>${v}</option>`).join('')}</select></div>
+                  <div class="form-group"><label class="form-label">Semester</label><select id="semester" class="form-select"><option>Semester 1 - 2025/2026</option><option>Semester 2 - 2025/2026</option></select></div>
+                  ${readonly('Academic year', 'academic_year', '2025/2026')}
+                  ${readonly('Date of submission', 'submission_date', new Date().toISOString().slice(0, 10))}
+                </div>
+                <div id="dynamic-fields"></div>
+                <div id="documents-section" class="hidden">
+                  <div class="card-hd" style="margin-top:14px"><h2 class="card-title">Required documents</h2><span id="doc-counter" class="text-gray-600" style="font-size:11px"></span></div>
+                  <div id="document-slots" style="display:grid;gap:10px"></div>
+                </div>
+              </form>
+            </section>
+            <aside class="card">
+              <div class="card-hd"><h2 class="card-title">Request summary</h2></div>
+              <div id="summary" style="display:grid;gap:10px;color:#64748b;font-size:11px">Select a request type to continue.</div>
+              <button id="submit-request" class="btn btn-primary w-full" type="button" disabled style="margin-top:12px">Submit request</button>
+              <button id="save-draft" class="btn btn-secondary w-full" type="button" style="margin-top:8px">Save as draft</button>
+            </aside>
+          </div>
+        `;
+
+        function readonly(label, id, value) {
+          return `<div class="form-group"><label class="form-label">${label}</label><input id="${id}" class="form-input" value="${FlowDeskShell.esc(value)}" readonly style="background:#f8fafc;color:#64748b"></div>`;
+        }
+
+        function docLabel(slug) {
+          return FlowDeskShell.titleCase(slug);
+        }
+
+        function selectedDocs() {
+          return state.selected?.required_docs || [];
+        }
+
+        // Fields always handled explicitly — don't render as dynamic textareas
+        const STATIC_FIELDS = new Set([
+          'full_name', 'matricule', 'faculty', 'department',
+          'level', 'semester', 'academic_year', 'submission_date', 'supervisor_id',
+        ]);
+
+        function renderDynamicFields() {
+          const container = document.getElementById('dynamic-fields');
+          const extra = (state.selected?.form_fields || []).filter(f => !STATIC_FIELDS.has(f));
+          if (!extra.length) { container.innerHTML = ''; return; }
+          container.innerHTML = `<div class="card-hd" style="margin-top:14px"><h2 class="card-title">Additional information</h2></div>` +
+            extra.map(f => `
+              <div class="form-group" style="margin-top:10px">
+                <label class="form-label">${FlowDeskShell.esc(FlowDeskShell.titleCase(f))}</label>
+                <textarea id="dynfield_${FlowDeskShell.esc(f)}" class="form-input" rows="3" placeholder="Optional"></textarea>
+              </div>`).join('');
+        }
+
+        function updateSubmitState() {
+          const required = selectedDocs();
+          const allRequired = state.selected?.all_documents_required;
+          const okDocs = !allRequired || required.every((slug) => state.files[slug]);
+          const okSupervisor = document.getElementById('supervisor-wrap').classList.contains('hidden') || document.getElementById('supervisor').value;
+          document.getElementById('submit-request').disabled = !state.selected || !okDocs || !okSupervisor;
+          document.getElementById('doc-counter').textContent = `${Object.keys(state.files).length} of ${required.length} documents uploaded`;
+        }
+
+        function renderDocuments() {
+          const docs = selectedDocs().filter((doc) => doc.toLowerCase() !== 'none');
+          document.getElementById('documents-section').classList.toggle('hidden', docs.length === 0);
+          document.getElementById('document-slots').innerHTML = docs.map((slug) => {
+            const file = state.files[slug];
+            return `<div style="border:1px solid #e5e7eb;border-radius:6px;padding:10px">
+              <label class="form-label">${FlowDeskShell.esc(docLabel(slug))}</label>
+              <label class="upload-zone">
+                <i class="ti ti-upload" aria-hidden="true"></i>
+                <span>${file ? FlowDeskShell.esc(file.name) : 'Click to upload or drag here'}</span>
+                <span class="text-gray-500" style="font-size:10px">${file ? `${FlowDeskShell.fmtBytes(file.size)} - ready` : 'PDF, DOCX, XLSX, PNG, JPG'}</span>
+                <input class="hidden" type="file" data-doc="${FlowDeskShell.esc(slug)}">
+              </label>
+              ${file ? `<button class="btn btn-sm btn-secondary" data-remove-doc="${FlowDeskShell.esc(slug)}" type="button" style="margin-top:6px"><i class="ti ti-trash" aria-hidden="true"></i> Remove</button>` : ''}
+            </div>`;
+          }).join('');
+          document.querySelectorAll('[data-doc]').forEach((input) => {
+            input.addEventListener('change', () => {
+              if (input.files[0]) state.files[input.dataset.doc] = input.files[0];
+              renderDocuments();
+              renderSummary();
+            });
+          });
+          document.querySelectorAll('[data-remove-doc]').forEach((button) => {
+            button.addEventListener('click', () => {
+              delete state.files[button.dataset.removeDoc];
+              renderDocuments();
+              renderSummary();
+            });
+          });
+          updateSubmitState();
+        }
+
+        function renderSummary() {
+          const type = state.selected;
+          const summary = document.getElementById('summary');
+          if (!type) {
+            summary.textContent = 'Select a request type to continue.';
+            updateSubmitState();
+            return;
+          }
+          const priorityClass = Number(type.priority) === 1 ? 'pill-red' : 'pill-amber';
+          summary.innerHTML = `
+            <strong style="color:#111827;font-size:12px">${FlowDeskShell.esc(type.name)}</strong>
+            <span class="pill pill-blue">${FlowDeskShell.esc(type.approval_type || type.department || 'Workflow')}</span>
+            <span class="pill ${priorityClass}">Priority ${FlowDeskShell.esc(type.priority || 2)}</span>
+            <div>${(type.tags || []).map((tag) => `<span class="pill pill-gray">${FlowDeskShell.esc(tag)}</span>`).join(' ') || '<span class="text-gray-500">No tags</span>'}</div>
+            <div>${selectedDocs().length ? `${Object.keys(state.files).length} of ${selectedDocs().length} documents uploaded` : 'No documents required'}</div>
+          `;
+          updateSubmitState();
+        }
+
+        async function loadSupervisors() {
+          const users = FlowDeskShell.results(await api.get('/api/auth/users/?role=approver&approver_type=supervisor').catch(() => []));
+          document.getElementById('supervisor').innerHTML = '<option value="">Choose supervisor</option>' + users.map((item) => `<option value="${item.id}">${FlowDeskShell.esc(FlowDeskShell.fullName(item))} ${item.department ? `- ${FlowDeskShell.esc(item.department)}` : ''}</option>`).join('');
+        }
+
+        state.types = FlowDeskShell.results(await WorkflowConfigAPI.list());
+        document.getElementById('workflow-type').innerHTML = '<option value="">Choose request type</option>' + state.types.map((type) => `<option value="${type.id}">${FlowDeskShell.esc(type.name)} - ${FlowDeskShell.esc(type.approval_type || type.department || 'General')}</option>`).join('');
+        document.getElementById('workflow-type').addEventListener('change', async (event) => {
+          state.selected = state.types.find((type) => Number(type.id) === Number(event.target.value));
+          state.files = {};
+          document.getElementById('type-description').textContent = state.selected?.description || '';
+          const needsSupervisor = (state.selected?.approval_chain || []).some((stop) => String(stop).toLowerCase() === 'supervisor') || String(state.selected?.metadata?.stop_1 || '').toLowerCase() === 'supervisor';
+          document.getElementById('supervisor-wrap').classList.toggle('hidden', !needsSupervisor);
+          if (needsSupervisor) await loadSupervisors();
+          renderDynamicFields();
+          renderDocuments();
+          renderSummary();
+        });
+        document.getElementById('supervisor').addEventListener('change', updateSubmitState);
+
+        document.getElementById('save-draft').addEventListener('click', () => {
+          localStorage.setItem('flowdesk.newRequestDraft', JSON.stringify({ workflow_type_id: state.selected?.id, saved_at: Date.now() }));
+          showToast('Draft saved in this browser.', 'success');
+        });
+
+        document.getElementById('submit-request').addEventListener('click', async () => {
+          const formData = new FormData();
+          const formPayload = {
+            full_name: FlowDeskShell.fullName(user),
+            matricule: user.matricule || '',
+            faculty: user.faculty || '',
+            department: user.department || '',
+            level: document.getElementById('level').value,
+            semester: document.getElementById('semester').value,
+            academic_year: document.getElementById('academic_year').value,
+            submission_date: document.getElementById('submission_date').value,
+            supervisor_id: document.getElementById('supervisor').value || '',
+          };
+          // Include any extra fields defined on the workflow type (e.g. notes)
+          (state.selected?.form_fields || []).forEach((field) => {
+            if (!STATIC_FIELDS.has(field)) {
+              const el = document.getElementById(`dynfield_${field}`);
+              formPayload[field] = el ? el.value : '';
+            }
+          });
+          formData.append('workflow_type_id', state.selected.id);
+          formData.append('form_data', JSON.stringify(formPayload));
+          const labels = Object.keys(state.files);
+          formData.append('document_labels', JSON.stringify(labels));
+          labels.forEach((label) => formData.append('documents', state.files[label]));
+          try {
+            const created = await WorkflowAPI.upload(formData);
+            showToast('Request submitted successfully - you will be notified of updates.', 'success');
+            window.location.href = `/static/pages/workflow-detail.html?id=${created.id}`;
+          } catch (error) {
+            showToast(error.message, 'error');
+          }
+        });
+      } catch (error) {
+        if (error.message !== 'Not authenticated' && error.message !== 'Access denied') showToast(error.message, 'error');
+      }
+    });
+  </script>
+</body>
+</html>

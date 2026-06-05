@@ -1,0 +1,4 @@
+<p>Hello {{ student_name|default:"there" }},</p>
+<p>Your {{ workflow_type_name|default:"workflow" }} request has been received and is now in the approval process.</p>
+{% if deadline %}<p>Deadline: {{ deadline }}</p>{% endif %}
+<p>FlowDesk</p>

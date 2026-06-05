@@ -24,7 +24,12 @@ class APIClient {
       'X-Correlation-ID': crypto.randomUUID(),
     };
 
-    const token = AuthManager.getAccessToken();
+    let token = AuthManager.getAccessToken();
+    if (!token && AuthManager.getRefreshToken()) {
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) token = AuthManager.getAccessToken();
+    }
+
     if (token) {
       headers.Authorization = `Bearer ${token}`;
     }
@@ -43,9 +48,18 @@ class APIClient {
     let response = await fetch(`${this.baseURL}${path}`, config);
 
     if (response.status === 401 && AuthManager.getRefreshToken()) {
-      await this.refreshAccessToken();
-      headers.Authorization = `Bearer ${AuthManager.getAccessToken()}`;
-      response = await fetch(`${this.baseURL}${path}`, { ...config, headers });
+      const refreshed = await this.refreshAccessToken();
+      if (refreshed) {
+        headers.Authorization = `Bearer ${AuthManager.getAccessToken()}`;
+        response = await fetch(`${this.baseURL}${path}`, { ...config, headers });
+      }
+    }
+
+    if (response.status === 401) {
+      AuthManager.clear();
+      if (window.location.pathname !== '/login/') {
+        window.location.href = '/login/';
+      }
     }
 
     if (!response.ok) {
@@ -70,14 +84,25 @@ class APIClient {
       },
       body: JSON.stringify(payload),
     })
-      .then((res) => res.json())
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.access) {
+          throw new APIError(res.status, data.detail || 'Session expired');
+        }
+        return data;
+      })
       .then((data) => {
         AuthManager.setAccessToken(data.access);
         this.refreshing = null;
+        return true;
       })
       .catch(() => {
-        AuthManager.logout();
+        AuthManager.clear();
         this.refreshing = null;
+        if (window.location.pathname !== '/login/') {
+          window.location.href = '/login/';
+        }
+        return false;
       });
 
     return this.refreshing;
@@ -108,6 +133,8 @@ const api = new APIClient();
 
 const AuthAPI = {
   login: (credentials) => api.post('/api/auth/login/', credentials),
+  signup: (payload) => api.post('/api/auth/signup/', payload),
+  requestMagicLink: (payload) => api.post('/api/auth/magic/request/', payload),
   refresh: (token) => api.post('/api/auth/refresh/', { refresh: token }),
   logout: () => api.post('/api/auth/logout/'),
   me: () => api.get('/api/auth/me/'),
@@ -119,9 +146,15 @@ const WorkflowAPI = {
   get: (id) => api.get(`/api/workflows/${id}/`),
   upload: (formData) => api.upload('/api/workflows/', formData),
   submit: (id) => api.patch(`/api/workflows/${id}/submit/`),
-  csvDryRun: (formData) => api.upload('/api/workflows/csv-dry-run/', formData),
-  csvImport: (formData) => api.upload('/api/workflows/csv-process/', formData),
+  progress: (id) => api.get(`/api/workflows/${id}/progress/`),
 };
+
+const WorkflowConfigAPI = {
+  list: () => api.get('/api/workflows/config/'),
+  get: (id) => api.get(`/api/workflows/config/${id}/`),
+  upload: (formData) => api.upload('/api/workflows/config/upload/', formData),
+};
+
 
 const ApprovalAPI = {
   pending: () => api.get('/api/approvals/pending/'),

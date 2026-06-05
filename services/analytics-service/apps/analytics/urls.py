@@ -3,6 +3,7 @@ from django.urls import path
 from apps.analytics.views import (
     ApproverPerformanceView,
     DashboardView,
+    RejectionRatesView,
     SLAReportView,
     WorkflowVolumeView,
 )
@@ -12,4 +13,5 @@ urlpatterns = [
     path("sla-report/", SLAReportView.as_view(), name="analytics-sla-report"),
     path("workflow-volume/", WorkflowVolumeView.as_view(), name="analytics-volume"),
     path("approver-performance/", ApproverPerformanceView.as_view(), name="analytics-approver-performance"),
+    path("rejection-rates/", RejectionRatesView.as_view(), name="analytics-rejection-rates"),
 ]

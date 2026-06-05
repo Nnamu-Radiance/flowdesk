@@ -4,7 +4,10 @@ from pathlib import Path
 import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+ROOT_DIR = BASE_DIR.parent.parent
 env = environ.Env(DEBUG=(bool, False))
+environ.Env.read_env(ROOT_DIR / ".env.local")
+environ.Env.read_env(ROOT_DIR / ".env")
 environ.Env.read_env(BASE_DIR / ".env")
 environ.Env.read_env(BASE_DIR / ".env.local")
 
@@ -73,6 +76,13 @@ TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "/static/"
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR / "media"
+# PRODUCTION: Replace with django-storages S3 backend:
+# DEFAULT_FILE_STORAGE = 'storages.backends.s3boto3.S3Boto3Storage'
+# AWS_STORAGE_BUCKET_NAME = env('AWS_S3_BUCKET')
+# AWS_S3_REGION_NAME = env('AWS_S3_REGION')
+DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {

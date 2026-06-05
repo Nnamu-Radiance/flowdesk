@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dashboard - FlowDesk</title>
+  <link rel="stylesheet" href="/static/css/base.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+</head>
+<body>
+  <script src="/static/js/utils.js"></script>
+  <script src="/static/js/auth.js"></script>
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/notifications.js"></script>
+  <script src="/static/js/shell.js"></script>
+  <script>
+  document.addEventListener('DOMContentLoaded', async () => {
+    let user, root;
+    try {
+      ({ user, root } = await FlowDeskShell.initPage({
+        activePage: 'dashboard',
+        title: 'Dashboard',
+        allowedRoles: ['submitter', 'approver', 'admin'],
+      }));
+    } catch (e) {
+      return;
+    }
+
+    const role = FlowDeskShell.roleOf(user);
+
+    root.innerHTML = `
+      <div class="stats-row" id="stats-row">
+        <div class="stat"><div class="stat-label">Loading…</div></div>
+      </div>
+      <div class="card">
+        <div class="card-hd">
+          <span class="card-title">Recent activity</span>
+          <a class="btn btn-sm btn-secondary" href="${role === 'approver' ? '/static/pages/approvals.html' : '/static/pages/workflows.html'}">View all</a>
+        </div>
+        <div id="activity-table">
+          <div style="padding:24px;text-align:center;color:#64748b;font-size:12px">Loading…</div>
+        </div>
+      </div>
+    `;
+
+    loadStats(role);
+    loadActivity(role);
+
+    FlowDeskShell.onLive('workflow.status_changed', () => { loadActivity(role); loadStats(role); });
+    FlowDeskShell.onLive('approval.decision', (payload) => {
+      updateDashboardWorkflowStatus(payload.workflow_id, payload.status || payload.decision || payload.action);
+      loadStats(role);
+      loadActivity(role);
+    });
+    FlowDeskShell.onLive('approval.approved', (payload) => {
+      updateDashboardWorkflowStatus(payload.workflow_id, 'approved');
+      loadStats(role);
+      loadActivity(role);
+    });
+    FlowDeskShell.onLive('approval.rejected', (payload) => {
+      updateDashboardWorkflowStatus(payload.workflow_id, 'rejected');
+      loadStats(role);
+      loadActivity(role);
+    });
+    FlowDeskShell.onLive('approval.returned', (payload) => {
+      updateDashboardWorkflowStatus(payload.workflow_id, 'returned');
+      loadStats(role);
+      loadActivity(role);
+    });
+    FlowDeskShell.onLive('approval.step_completed', () => { loadStats(role); loadActivity(role); });
+    FlowDeskShell.onLive('approval.requested', () => {
+      if (role === 'approver') loadActivity(role);
+    });
+  });
+
+  async function loadStats(role) {
+    const row = document.getElementById('stats-row');
+    if (!row) return;
+    try {
+      if (role === 'admin') {
+        const data = await api.get('/api/analytics/dashboard/');
+        row.innerHTML = `
+          ${statCard('Total workflows', data.total_workflows ?? 0, 'All time')}
+          ${statCard('Pending approval', data.pending_approval ?? 0, 'Active')}
+          ${statCard('Approved this month', data.approved_this_month ?? 0, '')}
+          ${statCard('SLA compliance', (data.sla_compliance_pct ?? 0) + '%', 'On-track workflows')}
+        `;
+      } else if (role === 'approver') {
+        const data = await api.get('/api/approvals/pending/');
+        const items = FlowDeskShell.results(data);
+        const now = new Date();
+        const overdue = items.filter(a => a.deadline && new Date(a.deadline) < now).length;
+        const avgSla = items.length
+          ? Math.round(items.reduce((s, a) => s + (a.sla_percentage ?? 0), 0) / items.length)
+          : 0;
+        row.innerHTML = `
+          ${statCard('Pending approvals', items.length, 'Assigned to you')}
+          ${statCard('Overdue', overdue, overdue ? 'Needs attention' : 'All on track')}
+          ${statCard('Avg SLA used', avgSla + '%', '')}
+          ${statCard('Queue total', items.length, '')}
+        `;
+      } else {
+        const data = await api.get('/api/workflows/?page_size=100');
+        const items = FlowDeskShell.results(data);
+        const inApproval = items.filter(w => w.status === 'in_approval' || w.status === 'submitted').length;
+        const approved = items.filter(w => w.status === 'approved').length;
+        const returned = items.filter(w => w.status === 'rejected' || w.status === 'returned').length;
+        row.innerHTML = `
+          ${statCard('My workflows', items.length, 'All time')}
+          ${statCard('In approval', inApproval, 'Active requests')}
+          ${statCard('Completed', approved, 'Approved')}
+          ${statCard('Rejected / Returned', returned, returned ? 'Need attention' : 'None')}
+        `;
+      }
+    } catch (_) {
+      row.innerHTML = `
+        ${statCard('My workflows', '—', '')}
+        ${statCard('In approval', '—', '')}
+        ${statCard('Completed', '—', '')}
+        ${statCard('SLA health', '—', '')}
+      `;
+    }
+  }
+
+  function statCard(label, val, sub) {
+    return `<div class="stat">
+      <div class="stat-label">${FlowDeskShell.esc(label)}</div>
+      <div class="stat-val">${FlowDeskShell.esc(String(val))}</div>
+      ${sub ? `<div class="stat-sub">${FlowDeskShell.esc(sub)}</div>` : ''}
+    </div>`;
+  }
+
+  async function loadActivity(role) {
+    const container = document.getElementById('activity-table');
+    if (!container) return;
+    try {
+      const endpoint = role === 'approver'
+        ? '/api/approvals/pending/'
+        : '/api/workflows/?page_size=8';
+      const data = await api.get(endpoint);
+      const items = FlowDeskShell.results(data);
+      if (!items.length) {
+        container.innerHTML = emptyState(role);
+        return;
+      }
+      if (role === 'approver') {
+        container.innerHTML = approverTable(items);
+      } else {
+        container.innerHTML = workflowTable(items);
+      }
+      container.querySelectorAll('tr[data-href]').forEach(row => {
+        row.addEventListener('click', () => { window.location.href = row.dataset.href; });
+      });
+    } catch (_) {
+      container.innerHTML = `<div style="padding:24px;text-align:center;color:#dc2626;font-size:12px">Failed to load activity. Please refresh.</div>`;
+    }
+  }
+
+  function workflowTable(items) {
+    return `<table class="tbl">
+      <thead><tr>
+        <th>Request type</th>
+        <th>Reference</th>
+        <th>Current stage</th>
+        <th>SLA</th>
+        <th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${items.map(w => {
+          const pct = w.sla_percentage ?? 0;
+          const slaClass = pct >= 100 ? 'danger' : pct >= 75 ? 'danger' : pct >= 50 ? 'warning' : '';
+          const statusPill = statusPillFor(w.status);
+          const stage = stageText(w);
+          return `<tr data-workflow-id="${w.id}" data-status="${FlowDeskShell.esc(w.status || '')}" data-href="/static/pages/workflow-detail.html?id=${w.id}">
+            <td style="font-size:11px;font-weight:500">${FlowDeskShell.esc(w.workflow_type?.name || w.name || '—')}</td>
+            <td class="mono" style="font-size:10px;color:#64748b">${FlowDeskShell.esc(w.document?.doc_id || w.name || '—')}</td>
+            <td style="font-size:11px;color:#475569">${FlowDeskShell.esc(stage)}</td>
+            <td>
+              <div class="sla-bar">
+                <div class="sla-track"><div class="sla-fill ${slaClass}" style="width:${pct}%"></div></div>
+                <span style="font-size:10px;color:#64748b">${FlowDeskShell.esc(w.remaining_time || '—')}</span>
+              </div>
+            </td>
+            <td>${statusPill}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  function approverTable(items) {
+    return `<table class="tbl">
+      <thead><tr>
+        <th>Student</th>
+        <th>Request type</th>
+        <th>Step</th>
+        <th>SLA</th>
+        <th>Action</th>
+      </tr></thead>
+      <tbody>
+        ${items.map(a => {
+          const pct = a.sla_percentage ?? 0;
+          const slaClass = pct >= 100 ? 'danger' : pct >= 75 ? 'danger' : pct >= 50 ? 'warning' : '';
+          return `<tr data-href="/static/pages/approvals.html">
+            <td style="font-size:11px">
+              <div style="font-weight:500">${FlowDeskShell.esc(a.student_name || '—')}</div>
+              <div style="font-size:10px;color:#64748b">${FlowDeskShell.esc(a.student_matricule || '')}</div>
+            </td>
+            <td style="font-size:11px">${FlowDeskShell.esc(a.workflow_type_name || '—')}</td>
+            <td><span class="pill pill-blue">Step ${a.step_number ?? '?'} of ${a.total_steps ?? '?'}</span></td>
+            <td>
+              <div class="sla-bar">
+                <div class="sla-track"><div class="sla-fill ${slaClass}" style="width:${pct}%"></div></div>
+                <span style="font-size:10px;color:#64748b">${FlowDeskShell.esc(a.remaining_time || '—')}</span>
+              </div>
+            </td>
+            <td><a class="btn btn-sm btn-primary" href="/static/pages/approvals.html">Review</a></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  function stageText(w) {
+    const meta = w.metadata || {};
+    if (w.status === 'draft') return 'Draft — not submitted';
+    if (w.status === 'approved') return 'Fully approved';
+    if (w.status === 'rejected') return 'Rejected';
+    if (w.status === 'returned') return 'Returned for changes';
+    if (meta.current_step && meta.total_steps) {
+      const office = meta.current_office ? ` — ${meta.current_office}` : '';
+      return `Step ${meta.current_step} of ${meta.total_steps}${office}`;
+    }
+    if (w.status === 'submitted') return 'Submitted — awaiting assignment';
+    if (w.status === 'in_approval') return 'In approval';
+    return '—';
+  }
+
+  function statusPillFor(s) {
+    const map = {
+      draft: 'pill-gray',
+      submitted: 'pill-blue',
+      in_approval: 'pill-amber',
+      approved: 'pill-green',
+      rejected: 'pill-red',
+      returned: 'pill-amber',
+    };
+    const cls = map[s] || 'pill-gray';
+    return `<span class="pill ${cls} status-badge">${FlowDeskShell.esc(s?.replace('_', ' ') || '—')}</span>`;
+  }
+
+  function updateDashboardWorkflowStatus(workflowId, status) {
+    if (!workflowId || !status) return;
+    const row = document.querySelector(`[data-workflow-id="${workflowId}"]`);
+    const badge = row?.querySelector('.status-badge');
+    if (!badge) return;
+    const map = {
+      approved: 'pill-green',
+      rejected: 'pill-red',
+      returned: 'pill-amber',
+      in_approval: 'pill-amber',
+      submitted: 'pill-blue',
+    };
+    row.dataset.status = status;
+    badge.textContent = String(status).replace('_', ' ');
+    badge.className = `pill ${map[status] || 'pill-gray'} status-badge`;
+  }
+  function emptyState(role) {
+    if (role === 'approver') {
+      return `<div style="padding:40px;text-align:center;color:#64748b">
+        <i class="ti ti-check" style="font-size:28px;display:block;margin-bottom:8px"></i>
+        <div style="font-size:13px;font-weight:500">No pending approvals</div>
+        <div style="font-size:11px;margin-top:4px">You're all caught up.</div>
+      </div>`;
+    }
+    return `<div style="padding:40px;text-align:center;color:#64748b">
+      <i class="ti ti-files" style="font-size:28px;display:block;margin-bottom:8px"></i>
+      <div style="font-size:13px;font-weight:500">No requests yet</div>
+      <div style="font-size:11px;margin-top:4px">Create your first request using the New Request button.</div>
+      <a class="btn btn-primary btn-sm" href="/static/pages/new-request.html" style="margin-top:14px">Make a request</a>
+    </div>`;
+  }
+  </script>
+</body>
+</html>

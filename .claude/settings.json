@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose *)",
+      "Bash(curl -s http://localhost:8001/health/)",
+      "Bash(curl -s http://localhost:8002/health/)",
+      "Bash(curl -s http://localhost:8003/health/)",
+      "Bash(curl -s http://localhost:8005/health/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost/media/workflow_docs/2026/06/05/SE_3210_Tutorial_Sheet_01.pdf)",
+      "Bash(timeout 5 bash -c \"sleep 4\")"
+    ]
+  }
+}

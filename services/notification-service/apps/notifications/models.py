@@ -6,8 +6,13 @@ class Notification(models.Model):
     type = models.CharField(max_length=40, db_index=True)
     title = models.CharField(max_length=255)
     message = models.TextField()
+    workflow_id = models.IntegerField(null=True, blank=True, db_index=True)
     read = models.BooleanField(default=False, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    @property
+    def is_read(self):
+        return self.read
 
 
 class Subscription(models.Model):
