@@ -1,6 +1,3 @@
-import uuid
-from datetime import datetime, timezone
-
 from celery import current_app
 from shared.events.publisher import publish_event
 
@@ -16,7 +13,8 @@ def notify_event(event_type: str, payload: dict, correlation_id: str = None) -> 
     return event
 
 
-def publish_sla_warning(workflow_id: int, assignee_id: int | None, level: str, deadline=None, student_id: int | None = None):
+def publish_sla_warning(workflow_id: int, assignee_id: int | None, level: str,
+                        deadline=None, student_id: int | None = None):
     return notify_event(
         "sla.warning",
         {
