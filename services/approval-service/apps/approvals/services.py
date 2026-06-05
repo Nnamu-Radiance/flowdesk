@@ -40,6 +40,7 @@ def cached_assignee_for(role: str, payload: dict) -> tuple[int | None, str]:
 
 # services/approval-service/apps/approvals/services.py
 
+
 def resolve_approver(stop_role: str, supervisor_id: int = None, department: str = None, faculty: str = None) -> int:
     """
     Given a stop label from the CSV, return the user ID of the approver
@@ -115,6 +116,7 @@ def resolve_approver(stop_role: str, supervisor_id: int = None, department: str 
         )
 
     return int(results[0]["id"])
+
 
 class ApprovalService:
     @staticmethod
@@ -364,7 +366,8 @@ class ApprovalService:
 
     @staticmethod
     @transaction.atomic
-    def reassign(chain: ApprovalChain, approver_id: int, new_assignee_id: int, reason: str, correlation_id: str | None = None):
+    def reassign(chain: ApprovalChain, approver_id: int, new_assignee_id: int,
+                 reason: str, correlation_id: str | None = None):
         step = chain.steps.select_for_update().filter(
             assignee_id=approver_id,
             status=ApprovalStep.Status.ACTIVE,
@@ -385,4 +388,3 @@ class ApprovalService:
         )
         ApprovalService.publish_requested(chain, step, correlation_id)
         return {"old_assignee_id": old_assignee_id, "new_assignee_id": new_assignee_id}
-

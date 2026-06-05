@@ -91,6 +91,7 @@ class WorkflowVolumeView(views.APIView):
     def get(self, request):
         period = request.query_params.get("period", "month")
         grain = {"week": "day", "month": "day", "year": "month"}.get(period, "day")
+
         def compute():
             return {
                 "period": period,

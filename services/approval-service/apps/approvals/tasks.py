@@ -38,9 +38,19 @@ def check_sla_deadlines(self):
             publish_escalation(chain.workflow_id, active.assignee_id, overdue_by_hours)
             warnings += 1
         elif pct >= 75:
-            publish_sla_warning(chain.workflow_id, active.assignee_id, "75%", chain.deadline, student_id=chain.student_id)
+            publish_sla_warning(
+                chain.workflow_id,
+                active.assignee_id,
+                "75%",
+                chain.deadline,
+                student_id=chain.student_id)
             warnings += 1
         elif pct >= 50:
-            publish_sla_warning(chain.workflow_id, active.assignee_id, "50%", chain.deadline, student_id=chain.student_id)
+            publish_sla_warning(
+                chain.workflow_id,
+                active.assignee_id,
+                "50%",
+                chain.deadline,
+                student_id=chain.student_id)
             warnings += 1
     return {"warnings": warnings}

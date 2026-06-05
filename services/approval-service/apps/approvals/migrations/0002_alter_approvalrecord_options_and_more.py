@@ -58,7 +58,19 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name='approvalchain',
             name='status',
-            field=models.CharField(choices=[('active', 'Active'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('returned', 'Returned for Changes')], db_index=True, default='active', max_length=20),
+            field=models.CharField(
+                choices=[
+                    ('active',
+                     'Active'),
+                    ('approved',
+                     'Approved'),
+                    ('rejected',
+                     'Rejected'),
+                    ('returned',
+                     'Returned for Changes')],
+                db_index=True,
+                default='active',
+                max_length=20),
         ),
         migrations.AddField(
             model_name='approvalchain',
@@ -150,7 +162,19 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='approvalrecord',
             name='action',
-            field=models.CharField(choices=[('approved', 'Approved'), ('rejected', 'Rejected'), ('returned', 'Returned for Changes'), ('reassigned', 'Reassigned'), ('commented', 'Commented')], max_length=20),
+            field=models.CharField(
+                choices=[
+                    ('approved',
+                     'Approved'),
+                    ('rejected',
+                     'Rejected'),
+                    ('returned',
+                     'Returned for Changes'),
+                    ('reassigned',
+                     'Reassigned'),
+                    ('commented',
+                     'Commented')],
+                max_length=20),
         ),
         migrations.AlterField(
             model_name='approvalstep',
@@ -160,7 +184,25 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='approvalstep',
             name='status',
-            field=models.CharField(choices=[('pending', 'Pending'), ('active', 'Active'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('returned', 'Returned for Changes'), ('reassigned', 'Reassigned'), ('void', 'Void')], db_index=True, default='pending', max_length=20),
+            field=models.CharField(
+                choices=[
+                    ('pending',
+                     'Pending'),
+                    ('active',
+                     'Active'),
+                    ('approved',
+                     'Approved'),
+                    ('rejected',
+                     'Rejected'),
+                    ('returned',
+                     'Returned for Changes'),
+                    ('reassigned',
+                     'Reassigned'),
+                    ('void',
+                     'Void')],
+                db_index=True,
+                default='pending',
+                max_length=20),
         ),
         migrations.RemoveField(
             model_name='approvalstep',

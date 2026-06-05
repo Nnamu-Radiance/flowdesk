@@ -25,7 +25,7 @@ class IsAdminOrApprover(permissions.BasePermission):
             and request.user.is_authenticated
             and getattr(request.user, "role", "") in {"HOD", "Dean", "admin", "approver"}
         )
-    
+
 
 def active_assigned_chain(workflow_id: int, user_id: int):
     return ApprovalChain.objects.filter(
@@ -53,7 +53,8 @@ class ApprovalDocumentsView(views.APIView):
     def get(self, request, workflow_id: int):
         chain = active_assigned_chain(workflow_id, request.user.id)
         if not chain:
-            return response.Response({"detail": "You are not assigned to this workflow"}, status=status.HTTP_403_FORBIDDEN)
+            return response.Response({"detail": "You are not assigned to this workflow"},
+                                     status=status.HTTP_403_FORBIDDEN)
         annotated = ApprovalRecord.objects.filter(workflow_id=workflow_id, annotated_document__isnull=False).exclude(
             annotated_document=""
         )
@@ -93,7 +94,14 @@ class ApprovalDecisionView(views.APIView):
                 action=action,
                 comments=comments,
                 annotated_document=request.FILES.get("annotated_document"),
-                send_feedback_to_student=str(request.data.get("send_feedback_to_student", "false")).lower() in {"true", "1", "yes", "on"},
+                send_feedback_to_student=str(
+                    request.data.get(
+                        "send_feedback_to_student",
+                        "false")).lower() in {
+                    "true",
+                    "1",
+                    "yes",
+                    "on"},
                 correlation_id=getattr(request, "correlation_id", None),
             )
         except PermissionError as exc:

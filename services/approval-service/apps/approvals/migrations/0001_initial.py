@@ -44,7 +44,8 @@ class Migration(migrations.Migration):
                 ('approver_id', models.IntegerField(db_index=True)),
                 ('role_required', models.CharField(blank=True, max_length=50)),
                 ('status', models.CharField(db_index=True, default='pending', max_length=20)),
-                ('chain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='steps', to='approvals.approvalchain')),
+                ('chain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE,
+                 related_name='steps', to='approvals.approvalchain')),
             ],
             options={
                 'ordering': ['order'],
