@@ -269,17 +269,23 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     def progress(self, request, pk=None):
         workflow = self.get_object()
         payload = workflow.metadata or {}
-        return response.Response(
-            {
-                "current_step": payload.get("current_step", 1 if workflow.status in {"submitted", "in_approval"} else 0),
-                "total_steps": payload.get("total_steps", len(workflow.workflow_type.approval_chain) if workflow.workflow_type else 0),
-                "current_office": payload.get("current_office", "Awaiting assignment"),
-                "steps_completed": payload.get("steps_completed", 0),
-                "steps_remaining": payload.get("steps_remaining", 0),
-                "status": workflow.status,
-                "latest_comment": payload.get("latest_comment", ""),
-            }
+        current_step = payload.get(
+            "current_step",
+            1 if workflow.status in {"submitted", "in_approval"} else 0,
         )
+        total_steps = payload.get(
+            "total_steps",
+            len(workflow.workflow_type.approval_chain) if workflow.workflow_type else 0,
+        )
+        return response.Response({
+            "current_step": current_step,
+            "total_steps": total_steps,
+            "current_office": payload.get("current_office", "Awaiting assignment"),
+            "steps_completed": payload.get("steps_completed", 0),
+            "steps_remaining": payload.get("steps_remaining", 0),
+            "status": workflow.status,
+            "latest_comment": payload.get("latest_comment", ""),
+        })
 
     @action(detail=True, methods=["patch"])
     def submit(self, request, pk=None):
