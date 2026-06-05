@@ -3,6 +3,7 @@ from django.conf import settings
 from django.urls import include, path
 from django.views.generic import RedirectView
 from django_prometheus.exports import ExportToDjangoView
+from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 from rest_framework.routers import DefaultRouter
 from apps.approvals.views import ApprovalViewSet
 from apps.workflows.views import WorkflowViewSet
@@ -35,4 +36,10 @@ urlpatterns = [
     path("api/", include(router.urls)),
     path("metrics/", ExportToDjangoView, name="prometheus-django-metrics"),
     path("api/admin/", include(admin_router.urls)),
+    # OpenAPI Schema
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    # Swagger UI
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    # Redoc UI
+    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 ]

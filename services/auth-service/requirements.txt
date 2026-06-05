@@ -18,3 +18,4 @@ requests==2.32.3
 pytest==8.3.2
 pytest-django==4.8.0
 pytest-cov==5.0.0
+drf-spectacular==0.27.2
