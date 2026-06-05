@@ -207,7 +207,8 @@ class GoogleOAuthCallbackView(APIView):
         code = request.query_params.get("code")
         state = request.query_params.get("state")
         if not code or not state:
-            return response.Response({"detail": "Missing Google OAuth code or state."}, status=status.HTTP_400_BAD_REQUEST)
+            return response.Response({"detail": "Missing Google OAuth code or state."},
+                                     status=status.HTTP_400_BAD_REQUEST)
 
         try:
             signing.loads(state, salt=GOOGLE_STATE_SALT, max_age=600)
@@ -281,6 +282,7 @@ class IsAdminOrInternalService(permissions.BasePermission):
 
 class IsAuthenticatedOrInternalService(permissions.BasePermission):
     """Allows any authenticated user OR internal service calls (no JWT required)."""
+
     def has_permission(self, request, view):
         if request.headers.get("X-Internal-Service"):
             return True
@@ -299,12 +301,12 @@ class UserListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         qs = User.objects.all().order_by("id")
-        role          = self.request.query_params.get("role")
+        role = self.request.query_params.get("role")
         approver_type = self.request.query_params.get("approver_type")
-        is_active     = self.request.query_params.get("is_active")
-        department    = self.request.query_params.get("department")
-        faculty       = self.request.query_params.get("faculty")
-        search        = self.request.query_params.get("search")
+        is_active = self.request.query_params.get("is_active")
+        department = self.request.query_params.get("department")
+        faculty = self.request.query_params.get("faculty")
+        search = self.request.query_params.get("search")
 
         if role:
             qs = qs.filter(role=role)
@@ -354,7 +356,8 @@ class SignatureStampUploadView(views.APIView):
         user = request.user
         if "signature_image" in request.FILES:
             if request.FILES["signature_image"].size > 200 * 1024:
-                return response.Response({"detail": "Signature must be under 200KB."}, status=status.HTTP_400_BAD_REQUEST)
+                return response.Response({"detail": "Signature must be under 200KB."},
+                                         status=status.HTTP_400_BAD_REQUEST)
             user.signature_image = request.FILES["signature_image"]
         if "stamp_image" in request.FILES:
             if request.FILES["stamp_image"].size > 200 * 1024:
@@ -371,7 +374,8 @@ class SignatureStampUploadView(views.APIView):
         elif field == "stamp_image":
             user.stamp_image = None
         else:
-            return response.Response({"detail": "field must be signature_image or stamp_image"}, status=status.HTTP_400_BAD_REQUEST)
+            return response.Response({"detail": "field must be signature_image or stamp_image"},
+                                     status=status.HTTP_400_BAD_REQUEST)
         user.save(update_fields=[field])
         return response.Response({"detail": "Deleted."})
 
@@ -388,13 +392,13 @@ class UserRoleUpdateView(APIView):
         except User.DoesNotExist:
             return response.Response({"detail": "User not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        old_role          = user.role
+        old_role = user.role
         old_approver_type = user.approver_type or ""
 
-        new_role          = serializer.validated_data["role"]
+        new_role = serializer.validated_data["role"]
         new_approver_type = serializer.validated_data.get("approver_type") or ""
 
-        user.role          = new_role
+        user.role = new_role
         user.approver_type = new_approver_type if new_role == "approver" else None
         user.save(update_fields=["role", "approver_type"])
 
