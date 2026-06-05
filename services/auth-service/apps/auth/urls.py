@@ -1,7 +1,6 @@
 from django.urls import path
 
 from apps.auth.views import (
-    SignatureStampUploadView,
     GoogleOAuthCallbackView,
     GoogleOAuthStartView,
     LoginView,
