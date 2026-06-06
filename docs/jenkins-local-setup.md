@@ -95,7 +95,7 @@ Use either:
 
 ## 6. Run local CI
 
-Run `Build Now` (or `Build with Parameters` and keep `LOCAL_ONLY=true`).
+Run `Build Now` (or `Build with Parameters` and keep `LOCAL_ONLY=true`, which is the default).
 
 Expected successful result:
 
@@ -103,6 +103,8 @@ Expected successful result:
 2. Lint succeeds for all services
 3. Unit tests succeed for all services
 4. Build is `SUCCESS`
+
+If Jenkins reaches `Push to Registry`, the job is not running with `LOCAL_ONLY=true`. Re-run with parameters and keep `LOCAL_ONLY` checked for local CI.
 
 ## 7. Verify the job is running your latest commit
 
@@ -159,4 +161,3 @@ Your local Jenkins setup is complete when:
 1. A pushed branch commit is checked out correctly
 2. `Lint` and `Unit Tests` pass
 3. Jenkins build ends `SUCCESS`
-
