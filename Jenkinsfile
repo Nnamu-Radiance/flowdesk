@@ -245,8 +245,12 @@ pipeline {
             echo "---- Kubernetes diagnostics ----"
             kubectl -n flowdesk get all -o wide || true
             kubectl -n flowdesk get pods -o wide || true
+            kubectl -n flowdesk get svc -o wide || true
+            kubectl -n flowdesk get endpoints -o wide || true
             kubectl -n flowdesk get pvc || true
             kubectl -n flowdesk get ingress || true
+            kubectl -n kube-system get pods -l k8s-app=kube-dns -o wide || true
+            kubectl -n kube-system get svc kube-dns -o wide || true
             kubectl -n flowdesk get events --sort-by=.lastTimestamp || true
             for workload in statefulset/postgres deployment/redis deployment/auth-service deployment/workflow-service deployment/approval-service deployment/notification-service deployment/analytics-service deployment/celery-worker deployment/celery-beat deployment/nginx; do
               echo "---- Describe ${workload} ----"
