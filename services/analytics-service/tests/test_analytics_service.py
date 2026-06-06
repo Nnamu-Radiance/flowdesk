@@ -28,6 +28,7 @@ def test_analytics_views(api_client):
         "/api/analytics/sla-report/",
         "/api/analytics/workflow-volume/",
         "/api/analytics/approver-performance/",
+        "/api/analytics/rejection-rates/",
     ]
     for url in endpoints:
         response = api_client.get(url)
