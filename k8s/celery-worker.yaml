@@ -13,11 +13,12 @@ spec:
       labels:
         app: celery-worker
     spec:
+      enableServiceLinks: true
       containers:
         - name: celery-workflow
           image: docker.io/flowdesk/workflow-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "workflow"]
+          command: ["sh", "-c", "export DATABASE_URL=\"postgresql://flowdesk:flowdesk@${POSTGRES_SERVICE_HOST}:5432/flowdesk_db?options=-csearch_path=workflow_svc\" REDIS_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_BROKER_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_RESULT_BACKEND=\"redis://${REDIS_SERVICE_HOST}:6379/1\" && celery -A config worker -l info -Q workflow"]
           envFrom:
             - configMapRef:
                 name: flowdesk-config
@@ -26,7 +27,7 @@ spec:
         - name: celery-approval
           image: docker.io/flowdesk/approval-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "approval"]
+          command: ["sh", "-c", "export DATABASE_URL=\"postgresql://flowdesk:flowdesk@${POSTGRES_SERVICE_HOST}:5432/flowdesk_db?options=-csearch_path=approval_svc\" REDIS_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_BROKER_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_RESULT_BACKEND=\"redis://${REDIS_SERVICE_HOST}:6379/1\" && celery -A config worker -l info -Q approval"]
           envFrom:
             - configMapRef:
                 name: flowdesk-config
@@ -35,7 +36,7 @@ spec:
         - name: celery-notification
           image: docker.io/flowdesk/notification-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "notification"]
+          command: ["sh", "-c", "export DATABASE_URL=\"postgresql://flowdesk:flowdesk@${POSTGRES_SERVICE_HOST}:5432/flowdesk_db?options=-csearch_path=notification_svc\" REDIS_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_BROKER_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_RESULT_BACKEND=\"redis://${REDIS_SERVICE_HOST}:6379/1\" && celery -A config worker -l info -Q notification"]
           envFrom:
             - configMapRef:
                 name: flowdesk-config

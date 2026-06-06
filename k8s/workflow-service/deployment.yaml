@@ -13,11 +13,12 @@ spec:
       labels:
         app: workflow-service
     spec:
+      enableServiceLinks: true
       containers:
         - name: workflow-service
           image: docker.io/flowdesk/workflow-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8002"]
+          command: ["sh", "-c", "export DATABASE_URL=\"postgresql://flowdesk:flowdesk@${POSTGRES_SERVICE_HOST}:5432/flowdesk_db?options=-csearch_path=workflow_svc\" REDIS_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_BROKER_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_RESULT_BACKEND=\"redis://${REDIS_SERVICE_HOST}:6379/1\" && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8002"]
           ports:
             - containerPort: 8002
           env:

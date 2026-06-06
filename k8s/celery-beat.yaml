@@ -13,11 +13,12 @@ spec:
       labels:
         app: celery-beat
     spec:
+      enableServiceLinks: true
       containers:
         - name: celery-beat
           image: docker.io/flowdesk/approval-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["celery", "-A", "config", "beat", "-l", "info", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+          command: ["sh", "-c", "export DATABASE_URL=\"postgresql://flowdesk:flowdesk@${POSTGRES_SERVICE_HOST}:5432/flowdesk_db?options=-csearch_path=approval_svc\" REDIS_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_BROKER_URL=\"redis://${REDIS_SERVICE_HOST}:6379/0\" CELERY_RESULT_BACKEND=\"redis://${REDIS_SERVICE_HOST}:6379/1\" && celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"]
           envFrom:
             - configMapRef:
                 name: flowdesk-config
