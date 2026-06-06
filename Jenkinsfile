@@ -4,8 +4,18 @@ pipeline {
   parameters {
     booleanParam(
       name: 'LOCAL_ONLY',
-      defaultValue: true,
+      defaultValue: false,
       description: 'Run only checkout/lint/tests and skip image build, registry push, Kubernetes deploy, and smoke tests.'
+    )
+    string(
+      name: 'SMOKE_BASE_URL',
+      defaultValue: 'http://localhost',
+      description: 'Externally reachable host/base URL for deployed smoke tests, for example http://flowdesk.local or http://127.0.0.1.'
+    )
+    string(
+      name: 'SMOKE_HOST_HEADER',
+      defaultValue: 'flowdesk.local',
+      description: 'Host header used by smoke tests when reaching the ingress by IP or localhost.'
     )
   }
 
@@ -77,12 +87,14 @@ pipeline {
 
     stage('Push to Registry') {
       when {
-        expression { return !params.LOCAL_ONLY && env.DOCKER_CREDENTIALS_USR?.trim() }
+        expression { return !params.LOCAL_ONLY }
       }
       steps {
         sh '''
           set -e
-          echo "${DOCKER_CREDENTIALS_PSW}" | docker login -u "${DOCKER_CREDENTIALS_USR}" --password-stdin
+          if [ -n "${DOCKER_CREDENTIALS_USR:-}" ]; then
+            echo "${DOCKER_CREDENTIALS_PSW}" | docker login -u "${DOCKER_CREDENTIALS_USR}" --password-stdin
+          fi
           for svc in $SERVICES; do
             docker push ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG}
             docker push ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:latest
@@ -111,6 +123,26 @@ pipeline {
           kubectl apply -f k8s/celery-beat.yaml
           kubectl apply -f k8s/nginx/
           kubectl apply -f k8s/ingress.yaml
+
+          kubectl -n flowdesk set image deployment/auth-service auth-service=${REGISTRY}/${IMAGE_NAMESPACE}/auth-service:${IMAGE_TAG}
+          kubectl -n flowdesk set image deployment/workflow-service workflow-service=${REGISTRY}/${IMAGE_NAMESPACE}/workflow-service:${IMAGE_TAG}
+          kubectl -n flowdesk set image deployment/approval-service approval-service=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG}
+          kubectl -n flowdesk set image deployment/notification-service notification-service=${REGISTRY}/${IMAGE_NAMESPACE}/notification-service:${IMAGE_TAG}
+          kubectl -n flowdesk set image deployment/analytics-service analytics-service=${REGISTRY}/${IMAGE_NAMESPACE}/analytics-service:${IMAGE_TAG}
+          kubectl -n flowdesk set image deployment/celery-worker celery-workflow=${REGISTRY}/${IMAGE_NAMESPACE}/workflow-service:${IMAGE_TAG} celery-approval=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG} celery-notification=${REGISTRY}/${IMAGE_NAMESPACE}/notification-service:${IMAGE_TAG}
+          kubectl -n flowdesk set image deployment/celery-beat celery-beat=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG}
+          kubectl -n flowdesk rollout restart deployment/nginx
+
+          kubectl -n flowdesk rollout status statefulset/postgres --timeout=180s
+          kubectl -n flowdesk rollout status deployment/redis --timeout=180s
+          kubectl -n flowdesk rollout status deployment/auth-service --timeout=300s
+          kubectl -n flowdesk rollout status deployment/workflow-service --timeout=300s
+          kubectl -n flowdesk rollout status deployment/approval-service --timeout=300s
+          kubectl -n flowdesk rollout status deployment/notification-service --timeout=300s
+          kubectl -n flowdesk rollout status deployment/analytics-service --timeout=300s
+          kubectl -n flowdesk rollout status deployment/celery-worker --timeout=300s
+          kubectl -n flowdesk rollout status deployment/celery-beat --timeout=300s
+          kubectl -n flowdesk rollout status deployment/nginx --timeout=180s
         '''
       }
     }
@@ -121,11 +153,16 @@ pipeline {
       }
       steps {
         sh '''
-          curl -f http://localhost/ || true
-          curl -f http://localhost:8001/health/
-          curl -f http://localhost:8002/health/
-          curl -f http://localhost:8003/health/
-          curl -f http://localhost:8005/health/
+          set -e
+          base_url="${SMOKE_BASE_URL%/}"
+          host_header="${SMOKE_HOST_HEADER:-flowdesk.local}"
+
+          curl -fsS -H "Host: ${host_header}" "${base_url}/"
+          curl -fsS -H "Host: ${host_header}" "${base_url}/health/auth/"
+          curl -fsS -H "Host: ${host_header}" "${base_url}/health/workflow/"
+          curl -fsS -H "Host: ${host_header}" "${base_url}/health/approval/"
+          curl -fsS -H "Host: ${host_header}" "${base_url}/health/notification/"
+          curl -fsS -H "Host: ${host_header}" "${base_url}/health/analytics/"
         '''
       }
     }
