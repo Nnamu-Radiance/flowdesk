@@ -6,7 +6,6 @@ USER root
 
 COPY --from=python /usr/local /usr/local
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
-COPY --from=docker-cli /usr/local/lib/docker/cli-plugins /usr/local/lib/docker/cli-plugins
 
 RUN usermod -aG root jenkins \
     && printf '#!/bin/sh\nif [ -z "${KUBECONFIG:-}" ] && [ -r /etc/rancher/k3s/k3s.yaml ]; then\n  export KUBECONFIG=/etc/rancher/k3s/k3s.yaml\nfi\nexec /usr/local/bin/k3s kubectl "$@"\n' > /usr/local/bin/kubectl \
