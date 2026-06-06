@@ -1,6 +1,44 @@
 from django.db import models
 
 
+class LegacyAliasQuerySet(models.QuerySet):
+    field_aliases = {}
+
+    def _alias_field(self, field):
+        descending = isinstance(field, str) and field.startswith("-")
+        raw = field[1:] if descending else field
+        aliased = self.field_aliases.get(raw, raw)
+        return f"-{aliased}" if descending else aliased
+
+    def _alias_kwargs(self, kwargs):
+        aliased = {}
+        for key, value in kwargs.items():
+            parts = key.split("__", 1)
+            field = self.field_aliases.get(parts[0], parts[0])
+            aliased["__".join([field, parts[1]]) if len(parts) > 1 else field] = value
+        return aliased
+
+    def filter(self, *args, **kwargs):
+        return super().filter(*args, **self._alias_kwargs(kwargs))
+
+    def exclude(self, *args, **kwargs):
+        return super().exclude(*args, **self._alias_kwargs(kwargs))
+
+    def order_by(self, *field_names):
+        return super().order_by(*(self._alias_field(field) for field in field_names))
+
+    def values_list(self, *fields, **kwargs):
+        return super().values_list(*(self._alias_field(field) for field in fields), **kwargs)
+
+
+class ApprovalStepQuerySet(LegacyAliasQuerySet):
+    field_aliases = {"order": "step_number", "approver_id": "assignee_id"}
+
+
+class ApprovalRecordQuerySet(LegacyAliasQuerySet):
+    field_aliases = {"approver_id": "actor_id"}
+
+
 class ApprovalChain(models.Model):
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
@@ -30,7 +68,17 @@ class ApprovalChain(models.Model):
 
     @property
     def name(self):
-        return f"{self.workflow_type_name or 'Workflow'} Approval Chain"
+        if hasattr(self, "_legacy_name"):
+            return self._legacy_name
+        if self.workflow_type_name:
+            return f"{self.workflow_type_name} Approval Chain"
+        return "Default Chain"
+
+    @name.setter
+    def name(self, value):
+        self._legacy_name = value
+        if value and value != "Default Chain" and not self.workflow_type_name:
+            self.workflow_type_name = str(value).replace(" Approval Chain", "")
 
 
 class ApprovalStep(models.Model):
@@ -54,6 +102,8 @@ class ApprovalStep(models.Model):
     comments = models.TextField(blank=True)
     has_annotated_document = models.BooleanField(default=False)
 
+    objects = ApprovalStepQuerySet.as_manager()
+
     class Meta:
         unique_together = [("chain", "step_number")]
         ordering = ["step_number"]
@@ -62,9 +112,17 @@ class ApprovalStep(models.Model):
     def order(self):
         return self.step_number
 
+    @order.setter
+    def order(self, value):
+        self.step_number = value
+
     @property
     def approver_id(self):
         return self.assignee_id
+
+    @approver_id.setter
+    def approver_id(self, value):
+        self.assignee_id = value
 
 
 class ApprovalRecord(models.Model):
@@ -89,6 +147,8 @@ class ApprovalRecord(models.Model):
     send_to_submitter = models.BooleanField(default=False)
     send_feedback_to_student = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    objects = ApprovalRecordQuerySet.as_manager()
 
     class Meta:
         ordering = ["created_at"]

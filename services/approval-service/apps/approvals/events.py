@@ -13,8 +13,10 @@ def notify_event(event_type: str, payload: dict, correlation_id: str = None) -> 
     return event
 
 
-def publish_sla_warning(workflow_id: int, assignee_id: int | None, level: str,
-                        deadline=None, student_id: int | None = None):
+def publish_sla_warning(workflow_id: int, assignee_id: int | None = None, level: str | None = None,
+                        deadline=None, student_id: int | None = None, percentage: int | None = None):
+    if percentage is not None and assignee_id is None and level is None and deadline is None and student_id is None:
+        return publish_event("sla.warning", {"workflow_id": workflow_id, "percentage": percentage}, "approval-service")
     return notify_event(
         "sla.warning",
         {
@@ -27,7 +29,9 @@ def publish_sla_warning(workflow_id: int, assignee_id: int | None, level: str,
     )
 
 
-def publish_escalation(workflow_id: int, assignee_id: int | None, overdue_by_hours: int):
+def publish_escalation(workflow_id: int, assignee_id: int | None = None, overdue_by_hours: int | None = None):
+    if assignee_id is None and overdue_by_hours is None:
+        return publish_event("approval.escalated", {"workflow_id": workflow_id}, "approval-service")
     return notify_event(
         "approval.escalated",
         {
