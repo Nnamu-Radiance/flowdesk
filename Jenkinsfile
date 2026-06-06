@@ -123,6 +123,39 @@ pipeline {
       }
     }
 
+    stage('Load Images Into Kubernetes') {
+      when {
+        expression { return !params.LOCAL_ONLY && !params.PUSH_TO_REGISTRY }
+      }
+      steps {
+        sh '''
+          set -e
+          mkdir -p .k8s-images
+
+          import_image_archive() {
+            archive="$1"
+            if command -v k3s >/dev/null 2>&1; then
+              k3s ctr images import "$archive" || { command -v sudo >/dev/null 2>&1 && sudo k3s ctr images import "$archive"; }
+            elif command -v ctr >/dev/null 2>&1; then
+              ctr -n k8s.io images import "$archive" || { command -v sudo >/dev/null 2>&1 && sudo ctr -n k8s.io images import "$archive"; }
+            elif command -v nerdctl >/dev/null 2>&1; then
+              nerdctl -n k8s.io load -i "$archive" || { command -v sudo >/dev/null 2>&1 && sudo nerdctl -n k8s.io load -i "$archive"; }
+            else
+              echo "No supported Kubernetes image import tool found. Install k3s, ctr, or nerdctl on the Jenkins agent, or run with PUSH_TO_REGISTRY=true."
+              exit 1
+            fi
+          }
+
+          for svc in $SERVICES; do
+            archive=".k8s-images/${svc}.tar"
+            docker save -o "$archive" ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:latest
+            import_image_archive "$archive"
+            rm -f "$archive"
+          done
+        '''
+      }
+    }
+
     stage('Deploy to Kubernetes') {
       when {
         expression { return !params.LOCAL_ONLY }

@@ -29,7 +29,8 @@ spec:
     spec:
       containers:
         - name: postgres
-          image: pgvector/pgvector:pg15-latest
+          image: pgvector/pgvector:pg16
+          imagePullPolicy: IfNotPresent
           env:
             - name: POSTGRES_DB
               value: flowdesk_db

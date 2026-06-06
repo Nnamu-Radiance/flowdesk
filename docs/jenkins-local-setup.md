@@ -113,7 +113,13 @@ If Jenkins and Kubernetes are on the same server and Kubernetes can use Jenkins'
 1. `LOCAL_ONLY=false`
 2. `PUSH_TO_REGISTRY=false`
 
-This builds images locally, skips Docker Hub, deploys to Kubernetes, and runs smoke tests. If pods fail with `ImagePullBackOff`, the Kubernetes runtime cannot see Jenkins' local Docker images; use a registry or load the images into the cluster runtime.
+This builds images locally, skips Docker Hub, imports the built images into the Kubernetes runtime, deploys to Kubernetes, and runs smoke tests. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`; if those tools are not available, use a registry instead.
+
+When using the bundled Docker Compose Jenkins service, rebuild/recreate Jenkins after changing the runtime mounts:
+
+```bash
+docker compose up -d --build --force-recreate jenkins
+```
 
 ## 7. Verify the job is running your latest commit
 
