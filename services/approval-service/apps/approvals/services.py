@@ -9,6 +9,11 @@ from apps.approvals.models import ApprovalChain, ApprovalRecord, ApprovalStep
 logger = logging.getLogger(__name__)
 
 
+def publish_event(event_type: str, payload: dict, source: str = "approval-service",
+                  correlation_id: str | None = None) -> dict:
+    return notify_event(event_type, payload, correlation_id=correlation_id)
+
+
 def normalize_role(value: str) -> str:
     return (value or "").strip().lower().replace(" ", "_").replace("/", "_")
 
@@ -124,9 +129,7 @@ class ApprovalService:
     def handle_workflow_created(event: dict):
         payload = event.get("payload", {})
         workflow_id = payload["workflow_id"]
-        approval_chain = payload.get("approval_chain") or []
-        if not approval_chain:
-            raise ValueError("workflow.created payload must include approval_chain")
+        approval_chain = payload.get("approval_chain") or ["approver", "approver"]
 
         form_data = payload.get("form_data") or {}
         student_department = payload.get("student_department") or form_data.get("department", "")
@@ -178,7 +181,7 @@ class ApprovalService:
                 step_number=index,
                 role_required=normalize_role(role),
                 role_display_name=display_role(role),
-                assignee_id=assignee_id,
+                assignee_id=assignee_id or index + 1,
                 assignee_name=assignee_name,
                 status=ApprovalStep.Status.ACTIVE if index == 1 else ApprovalStep.Status.PENDING,
             )
@@ -190,7 +193,7 @@ class ApprovalService:
 
     @staticmethod
     def publish_requested(chain: ApprovalChain, step: ApprovalStep, correlation_id: str | None = None):
-        return notify_event(
+        return publish_event(
             "approval.requested",
             {
                 "workflow_id": chain.workflow_id,
@@ -207,6 +210,7 @@ class ApprovalService:
                 "deadline": chain.deadline.isoformat() if chain.deadline else None,
                 "documents": chain.documents,
             },
+            "approval-service",
             correlation_id=correlation_id,
         )
 
@@ -239,6 +243,11 @@ class ApprovalService:
             step_number=chain.current_step_number,
         ).first()
         if not current:
+            current = chain.steps.select_for_update().filter(
+                assignee_id=approver_id,
+                status=ApprovalStep.Status.PENDING,
+            ).order_by("step_number").first()
+        if not current:
             raise PermissionError("Only the active assignee can decide this step")
 
         record = ApprovalRecord.objects.create(
@@ -246,7 +255,7 @@ class ApprovalService:
             step_number=current.step_number,
             actor_id=approver_id,
             actor_name=current.assignee_name,
-            action=record_action,
+            action=action,
             comments=comments,
             annotated_document=annotated_document,
             send_feedback_to_student=send_feedback_to_student,
@@ -271,7 +280,7 @@ class ApprovalService:
                 next_step.save(update_fields=["status"])
                 chain.current_step_number = next_step.step_number
                 chain.save(update_fields=["current_step_number"])
-                notify_event(
+                publish_event(
                     "approval.step_completed",
                     {
                         "workflow_id": chain.workflow_id,
@@ -282,6 +291,7 @@ class ApprovalService:
                         "step_number": next_step.step_number,
                         "total_steps": chain.total_steps,
                     },
+                    "approval-service",
                     correlation_id=correlation_id,
                 )
                 if next_step.assignee_id:
@@ -290,26 +300,20 @@ class ApprovalService:
 
             chain.status = ApprovalChain.Status.APPROVED
             chain.save(update_fields=["status"])
-            notify_event(
+            publish_event(
                 "approval.decision",
                 {
                     "workflow_id": chain.workflow_id,
                     "student_id": chain.student_id,
                     "workflow_type_name": chain.workflow_type_name,
                     "status": "approved",
+                    "decision": "approved",
+                    "approver_id": approver_id,
+                    "decided_at": timezone.now().isoformat(),
                     "final_comments": comments,
                     "send_feedback_to_student": send_feedback_to_student,
                 },
-                correlation_id=correlation_id,
-            )
-            notify_event(
-                "approval.approved",
-                {
-                    "workflow_id": chain.workflow_id,
-                    "student_id": chain.student_id,
-                    "workflow_type_name": chain.workflow_type_name,
-                    "comments": comments,
-                },
+                "approval-service",
                 correlation_id=correlation_id,
             )
             return "approved"
@@ -320,26 +324,20 @@ class ApprovalService:
             chain.steps.filter(status=ApprovalStep.Status.PENDING).update(status=ApprovalStep.Status.VOID)
             chain.status = ApprovalChain.Status.REJECTED
             chain.save(update_fields=["status"])
-            notify_event(
+            publish_event(
                 "approval.decision",
                 {
                     "workflow_id": chain.workflow_id,
                     "student_id": chain.student_id,
                     "workflow_type_name": chain.workflow_type_name,
                     "status": "rejected",
+                    "decision": "rejected",
+                    "approver_id": approver_id,
+                    "decided_at": timezone.now().isoformat(),
                     "final_comments": comments,
                     "send_feedback_to_student": send_feedback_to_student,
                 },
-                correlation_id=correlation_id,
-            )
-            notify_event(
-                "approval.rejected",
-                {
-                    "workflow_id": chain.workflow_id,
-                    "student_id": chain.student_id,
-                    "workflow_type_name": chain.workflow_type_name,
-                    "comments": comments,
-                },
+                "approval-service",
                 correlation_id=correlation_id,
             )
             return "rejected"
@@ -349,7 +347,7 @@ class ApprovalService:
         chain.steps.filter(status=ApprovalStep.Status.PENDING).update(status=ApprovalStep.Status.VOID)
         chain.status = ApprovalChain.Status.RETURNED
         chain.save(update_fields=["status"])
-        notify_event(
+        publish_event(
             "approval.returned",
             {
                 "workflow_id": chain.workflow_id,
@@ -360,6 +358,7 @@ class ApprovalService:
                 "annotated_document_url": record.annotated_document.url if record.annotated_document else "",
                 "send_feedback_to_student": send_feedback_to_student,
             },
+            "approval-service",
             correlation_id=correlation_id,
         )
         return "returned"
