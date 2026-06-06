@@ -9,6 +9,8 @@ from apps.workflows.models import label_for_document_slug
 CONFIG_HEADERS = {
     "name",
     "approval_type",
+}
+OPTIONAL_HEADERS = {
     "description",
     "deadline",
     "priority",

@@ -6,6 +6,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.workflows.models import Document, Workflow
+from apps.workflows.events import publish_workflow_created
 
 logger = logging.getLogger(__name__)
 
@@ -87,8 +88,6 @@ class WorkflowService:
             )
 
         transaction.on_commit(trigger_chain)
-
-        from apps.workflows.events import publish_workflow_created
 
         try:
             publish_workflow_created(workflow, correlation_id or "")
