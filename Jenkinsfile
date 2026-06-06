@@ -212,6 +212,12 @@ pipeline {
           kubectl apply -f k8s/configmap.yaml
           kubectl apply -f k8s/secret.yaml
           kubectl apply -f k8s/postgres.yaml
+          desired_postgres_image="pgvector/pgvector:pg16"
+          current_postgres_image="$(kubectl -n flowdesk get pod postgres-0 -o jsonpath='{.spec.containers[?(@.name=="postgres")].image}' 2>/dev/null || true)"
+          if [ -n "$current_postgres_image" ] && [ "$current_postgres_image" != "$desired_postgres_image" ]; then
+            echo "Deleting stale postgres-0 pod using image ${current_postgres_image}; StatefulSet will recreate it with ${desired_postgres_image}."
+            kubectl -n flowdesk delete pod postgres-0 --wait=false
+          fi
           kubectl apply -f k8s/redis.yaml
           kubectl apply -f k8s/auth-service/
           kubectl apply -f k8s/workflow-service/

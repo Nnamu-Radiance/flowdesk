@@ -176,6 +176,13 @@ docker compose up -d --build --force-recreate --no-deps jenkins
 docker exec flowdesk-jenkins kubectl get nodes -o wide
 ```
 
+If Postgres remains in `ImagePullBackOff` for an old image such as `pgvector/pgvector:pg15-latest`, delete the stale StatefulSet pod after applying the current manifest. The PVC is retained and the StatefulSet recreates the pod with the configured `pgvector/pgvector:pg16` image:
+
+```bash
+kubectl -n flowdesk delete pod postgres-0 --wait=false
+kubectl -n flowdesk rollout status statefulset/postgres --timeout=180s
+```
+
 ## 9. Production smoke tests
 
 Current `Smoke Tests` stage curls localhost endpoints. For production this may not represent end-user traffic path.
