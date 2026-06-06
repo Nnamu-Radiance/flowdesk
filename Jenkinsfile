@@ -7,6 +7,26 @@ pipeline {
       defaultValue: true,
       description: 'Run local CI only. When true, skip Docker image push, Kubernetes deploy, and smoke tests.'
     )
+    booleanParam(
+      name: 'DEPLOY_ONLY',
+      defaultValue: false,
+      description: 'Skip lint, unit tests, Docker build, image push, and image import. Run Kubernetes deploy and smoke tests only.'
+    )
+    string(
+      name: 'DEPLOY_IMAGE_TAG',
+      defaultValue: '',
+      description: 'Existing image tag to deploy when using DEPLOY_ONLY or SKIP_IMAGE_BUILD. Leave blank to keep currently deployed app images.'
+    )
+    booleanParam(
+      name: 'SKIP_CI_CHECKS',
+      defaultValue: false,
+      description: 'Skip lint and unit tests for faster deploy debugging.'
+    )
+    booleanParam(
+      name: 'SKIP_IMAGE_BUILD',
+      defaultValue: false,
+      description: 'Skip Docker image build, push, and Kubernetes runtime image import. Use DEPLOY_IMAGE_TAG or keep currently deployed app images.'
+    )
     string(
       name: 'REGISTRY',
       defaultValue: 'docker.io',
@@ -59,7 +79,32 @@ pipeline {
       }
     }
 
+    stage('Resolve Pipeline Mode') {
+      steps {
+        script {
+          def deployTag = params.DEPLOY_IMAGE_TAG?.trim()
+          if (params.DEPLOY_ONLY || params.SKIP_IMAGE_BUILD) {
+            env.IMAGE_TAG = deployTag ?: ''
+          } else {
+            env.IMAGE_TAG = env.BUILD_NUMBER
+          }
+
+          if (params.LOCAL_ONLY && params.DEPLOY_ONLY) {
+            error('DEPLOY_ONLY requires LOCAL_ONLY=false so Kubernetes deploy and smoke stages can run.')
+          }
+
+          echo "DEPLOY_ONLY=${params.DEPLOY_ONLY}"
+          echo "SKIP_CI_CHECKS=${params.SKIP_CI_CHECKS}"
+          echo "SKIP_IMAGE_BUILD=${params.SKIP_IMAGE_BUILD}"
+          echo "IMAGE_TAG=${env.IMAGE_TAG ?: '(keeping current deployment images)'}"
+        }
+      }
+    }
+
     stage('Lint') {
+      when {
+        expression { return !params.DEPLOY_ONLY && !params.SKIP_CI_CHECKS }
+      }
       steps {
         sh '''
           set -e
@@ -76,6 +121,9 @@ pipeline {
     }
 
     stage('Unit Tests') {
+    when {
+        expression { return !params.DEPLOY_ONLY && !params.SKIP_CI_CHECKS }
+    }
     steps {
         sh '''
             set -e
@@ -92,7 +140,7 @@ pipeline {
 
     stage('Build Docker Images') {
       when {
-        expression { return !params.LOCAL_ONLY }
+        expression { return !params.LOCAL_ONLY && !params.DEPLOY_ONLY && !params.SKIP_IMAGE_BUILD }
       }
       steps {
         sh '''
@@ -107,7 +155,7 @@ pipeline {
 
     stage('Push to Registry') {
       when {
-        expression { return !params.LOCAL_ONLY && params.PUSH_TO_REGISTRY }
+        expression { return !params.LOCAL_ONLY && !params.DEPLOY_ONLY && !params.SKIP_IMAGE_BUILD && params.PUSH_TO_REGISTRY }
       }
       steps {
         withCredentials([usernamePassword(credentialsId: params.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
@@ -125,7 +173,7 @@ pipeline {
 
     stage('Load Images Into Kubernetes') {
       when {
-        expression { return !params.LOCAL_ONLY && !params.PUSH_TO_REGISTRY }
+        expression { return !params.LOCAL_ONLY && !params.DEPLOY_ONLY && !params.SKIP_IMAGE_BUILD && !params.PUSH_TO_REGISTRY }
       }
       steps {
         sh '''
@@ -229,13 +277,17 @@ pipeline {
           kubectl apply -f k8s/nginx/
           kubectl apply -f k8s/ingress.yaml
 
-          kubectl -n flowdesk set image deployment/auth-service auth-service=${REGISTRY}/${IMAGE_NAMESPACE}/auth-service:${IMAGE_TAG}
-          kubectl -n flowdesk set image deployment/workflow-service workflow-service=${REGISTRY}/${IMAGE_NAMESPACE}/workflow-service:${IMAGE_TAG}
-          kubectl -n flowdesk set image deployment/approval-service approval-service=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG}
-          kubectl -n flowdesk set image deployment/notification-service notification-service=${REGISTRY}/${IMAGE_NAMESPACE}/notification-service:${IMAGE_TAG}
-          kubectl -n flowdesk set image deployment/analytics-service analytics-service=${REGISTRY}/${IMAGE_NAMESPACE}/analytics-service:${IMAGE_TAG}
-          kubectl -n flowdesk set image deployment/celery-worker celery-workflow=${REGISTRY}/${IMAGE_NAMESPACE}/workflow-service:${IMAGE_TAG} celery-approval=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG} celery-notification=${REGISTRY}/${IMAGE_NAMESPACE}/notification-service:${IMAGE_TAG}
-          kubectl -n flowdesk set image deployment/celery-beat celery-beat=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG}
+          if [ -n "${IMAGE_TAG:-}" ]; then
+            kubectl -n flowdesk set image deployment/auth-service auth-service=${REGISTRY}/${IMAGE_NAMESPACE}/auth-service:${IMAGE_TAG}
+            kubectl -n flowdesk set image deployment/workflow-service workflow-service=${REGISTRY}/${IMAGE_NAMESPACE}/workflow-service:${IMAGE_TAG}
+            kubectl -n flowdesk set image deployment/approval-service approval-service=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG}
+            kubectl -n flowdesk set image deployment/notification-service notification-service=${REGISTRY}/${IMAGE_NAMESPACE}/notification-service:${IMAGE_TAG}
+            kubectl -n flowdesk set image deployment/analytics-service analytics-service=${REGISTRY}/${IMAGE_NAMESPACE}/analytics-service:${IMAGE_TAG}
+            kubectl -n flowdesk set image deployment/celery-worker celery-workflow=${REGISTRY}/${IMAGE_NAMESPACE}/workflow-service:${IMAGE_TAG} celery-approval=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG} celery-notification=${REGISTRY}/${IMAGE_NAMESPACE}/notification-service:${IMAGE_TAG}
+            kubectl -n flowdesk set image deployment/celery-beat celery-beat=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG}
+          else
+            echo "Skipping application image updates; keeping currently deployed images."
+          fi
           kubectl -n flowdesk rollout restart deployment/nginx
 
           kubectl -n flowdesk rollout status statefulset/postgres --timeout=180s
