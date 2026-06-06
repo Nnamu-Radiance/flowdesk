@@ -38,7 +38,8 @@ def test_handle_event_task_creates_notification_and_dispatches():
         result = handle_event.run(event)
 
     saved = Notification.objects.get(recipient_id=42)
-    assert result == {"handled": "workflow.created"}
+    assert result["handled"] == "workflow.created"
+    assert result["recipients"] == [42]
     assert saved.type == "workflow.created"
     assert saved.title == "Workflow Created"
     assert saved.read is False
@@ -58,7 +59,8 @@ def test_handle_event_task_without_recipient_is_noop():
     ) as mock_email:
         result = handle_event.run(event)
 
-    assert result == {"handled": "workflow.created"}
+    assert result["handled"] == "workflow.created"
+    assert result["recipients"] == []
     assert Notification.objects.count() == 0
     mock_layer.assert_not_called()
     mock_email.assert_not_called()

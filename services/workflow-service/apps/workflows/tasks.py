@@ -45,26 +45,47 @@ def process_document(self, workflow_id: int):
 
 @shared_task(bind=True, base=RetryTask, queue="workflow")
 def process_csv_bulk(self, csv_text: str, submitter_id: int):
+    from django.db import transaction
+
     from apps.workflows.csv_import import parse_workflow_config_csv
-    from apps.workflows.models import WorkflowType
+    from apps.workflows.models import (
+        ApprovalStop,
+        Workflow,
+        WorkflowDocumentRequirement,
+    )
 
     result = parse_workflow_config_csv(csv_text)
-    created = 0
-    updated = 0
+    created_count = 0
 
-    for row in result.valid_rows:
-        _, was_created = WorkflowType.objects.update_or_create(
-            name=row["name"],
-            defaults={key: value for key, value in row.items() if key in WORKFLOW_TYPE_FIELDS},
-        )
-        if was_created:
-            created += 1
-        else:
-            updated += 1
+    with transaction.atomic():
+        for row in result.valid_rows:
+            workflow = Workflow.objects.create(
+                name=row["name"],
+                approval_type=row.get("approval_type", ""),
+                description=row.get("description", ""),
+                priority=row.get("priority", 2),
+                tags=row.get("tags", []),
+                metadata=row.get("metadata", {}),
+                all_documents_required=row.get("all_documents_required", False),
+                created_by_id=submitter_id,
+                status="draft",
+            )
+
+            # Create approval stops from metadata
+            stops = row.get("approval_chain", [])
+            for i, stop_name in enumerate(stops, start=1):
+                ApprovalStop.objects.create(workflow=workflow, name=stop_name, order=i)
+
+            # Create document requirements from metadata
+            reqs = row.get("required_docs", [])
+            for req_slug in reqs:
+                WorkflowDocumentRequirement.objects.create(workflow=workflow, document_slug=req_slug)
+
+            created_count += 1
 
     return {
         "status": "complete",
-        "created": created,
-        "updated": updated,
+        "created": created_count,
+        "updated": 0,
         "errors": result.errors[:20],
     }
