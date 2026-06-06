@@ -109,6 +109,24 @@ cd /var/www/flowdesk
 docker compose up -d --force-recreate --no-deps jenkins
 ```
 
+If `git pull` refuses to merge because of local server edits to `Dockerfile.jenkins` or `docker-compose.yml`, save those edits before pulling:
+
+```bash
+cd /var/www/flowdesk
+git stash push -m "server jenkins compose edits" Dockerfile.jenkins docker-compose.yml
+git pull
+```
+
+If Compose then reports that container name `/flowdesk-jenkins` is already in use, remove only that old Jenkins container and recreate it. The Jenkins data is kept in the `jenkins_data` Docker volume:
+
+```bash
+docker rm -f flowdesk-jenkins
+docker compose up -d --build --force-recreate --no-deps jenkins
+docker exec flowdesk-jenkins env | grep KUBECONFIG
+docker exec flowdesk-jenkins ls -l /etc/rancher/k3s/k3s.yaml
+docker exec flowdesk-jenkins kubectl get nodes -o wide
+```
+
 If the push fails with `insufficient_scope: authorization failed`, verify:
 
 1. Jenkins has a Username/Password credential with the id from `DOCKER_CREDENTIALS_ID`
@@ -151,7 +169,7 @@ For option 2:
 1. Store kubeconfig as Jenkins secret file
 2. Expose it in pipeline stage and set `KUBECONFIG` before `kubectl apply`
 
-For bundled same-server k3s deployments, the included Compose service mounts `/etc/rancher/k3s` and sets `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`. Recreate Jenkins after pulling Compose changes:
+For bundled same-server k3s deployments, the included Compose service mounts `/etc/rancher/k3s/k3s.yaml` and sets `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`. Recreate Jenkins after pulling Compose changes:
 
 ```bash
 docker compose up -d --build --force-recreate --no-deps jenkins

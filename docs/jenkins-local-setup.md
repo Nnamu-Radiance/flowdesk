@@ -115,7 +115,7 @@ If Jenkins and Kubernetes are on the same server and Kubernetes can use Jenkins'
 
 This builds images locally, skips Docker Hub, imports the built images into the Kubernetes runtime, deploys to Kubernetes, and runs smoke tests. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`; if those tools are not available, use a registry instead.
 
-For bundled same-server k3s deploys, the Jenkins container also needs the host kubeconfig. The included Compose service mounts `/etc/rancher/k3s` and sets `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`, so recreate Jenkins after pulling changes to `docker-compose.yml`:
+For bundled same-server k3s deploys, the Jenkins container also needs the host kubeconfig. The included Compose service mounts `/etc/rancher/k3s/k3s.yaml` and sets `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`, so recreate Jenkins after pulling changes to `docker-compose.yml`:
 
 ```bash
 docker compose up -d --build --force-recreate --no-deps jenkins
@@ -166,6 +166,24 @@ If the Jenkins setup wizard says the instance is offline, Jenkins cannot reach t
 ```bash
 cd /var/www/flowdesk
 docker compose up -d --force-recreate --no-deps jenkins
+```
+
+If `git pull` refuses to merge because of local server edits to `Dockerfile.jenkins` or `docker-compose.yml`, save those edits before pulling:
+
+```bash
+cd /var/www/flowdesk
+git stash push -m "server jenkins compose edits" Dockerfile.jenkins docker-compose.yml
+git pull
+```
+
+If Compose then reports that container name `/flowdesk-jenkins` is already in use, remove only that old Jenkins container and recreate it. The Jenkins data is kept in the `jenkins_data` Docker volume:
+
+```bash
+docker rm -f flowdesk-jenkins
+docker compose up -d --build --force-recreate --no-deps jenkins
+docker exec flowdesk-jenkins env | grep KUBECONFIG
+docker exec flowdesk-jenkins ls -l /etc/rancher/k3s/k3s.yaml
+docker exec flowdesk-jenkins kubectl get nodes -o wide
 ```
 
 ## 7. Verify the job is running your latest commit
