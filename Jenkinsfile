@@ -140,7 +140,14 @@ pipeline {
             kubectl -n flowdesk logs statefulset/postgres --tail=120 || true
             echo "---- End Kubernetes diagnostics ----"
           }
-          trap dump_k8s_diagnostics ERR
+          diagnostics_on_exit() {
+            status=$?
+            if [ "$status" -ne 0 ]; then
+              dump_k8s_diagnostics
+            fi
+            exit "$status"
+          }
+          trap diagnostics_on_exit 0
 
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/configmap.yaml
