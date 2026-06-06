@@ -8,24 +8,24 @@ pipeline {
       description: 'Run local CI only. When true, skip Docker image push, Kubernetes deploy, and smoke tests.'
     )
     booleanParam(
-      name: 'DEPLOY_ONLY',
-      defaultValue: false,
-      description: 'Skip lint, unit tests, Docker build, image push, and image import. Run Kubernetes deploy and smoke tests only.'
+      name: 'RUN_LINT',
+      defaultValue: true,
+      description: 'Run lint checks.'
+    )
+    booleanParam(
+      name: 'RUN_UNIT_TESTS',
+      defaultValue: true,
+      description: 'Run unit tests.'
+    )
+    booleanParam(
+      name: 'BUILD_DOCKER_IMAGES',
+      defaultValue: true,
+      description: 'Build Docker images. When false, image push/import is skipped and deploy keeps current images unless DEPLOY_IMAGE_TAG is set.'
     )
     string(
       name: 'DEPLOY_IMAGE_TAG',
       defaultValue: '',
-      description: 'Existing image tag to deploy when using DEPLOY_ONLY or SKIP_IMAGE_BUILD. Leave blank to keep currently deployed app images.'
-    )
-    booleanParam(
-      name: 'SKIP_CI_CHECKS',
-      defaultValue: false,
-      description: 'Skip lint and unit tests for faster deploy debugging.'
-    )
-    booleanParam(
-      name: 'SKIP_IMAGE_BUILD',
-      defaultValue: false,
-      description: 'Skip Docker image build, push, and Kubernetes runtime image import. Use DEPLOY_IMAGE_TAG or keep currently deployed app images.'
+      description: 'Existing image tag to deploy when BUILD_DOCKER_IMAGES=false. Leave blank to keep currently deployed app images.'
     )
     string(
       name: 'REGISTRY',
@@ -79,23 +79,20 @@ pipeline {
       }
     }
 
-    stage('Resolve Pipeline Mode') {
+    stage('Resolve Pipeline Options') {
       steps {
         script {
           def deployTag = params.DEPLOY_IMAGE_TAG?.trim()
-          if (params.DEPLOY_ONLY || params.SKIP_IMAGE_BUILD) {
-            env.IMAGE_TAG = deployTag ?: ''
-          } else {
+          if (params.BUILD_DOCKER_IMAGES) {
             env.IMAGE_TAG = env.BUILD_NUMBER
+          } else {
+            env.IMAGE_TAG = deployTag ?: ''
           }
 
-          if (params.LOCAL_ONLY && params.DEPLOY_ONLY) {
-            error('DEPLOY_ONLY requires LOCAL_ONLY=false so Kubernetes deploy and smoke stages can run.')
-          }
-
-          echo "DEPLOY_ONLY=${params.DEPLOY_ONLY}"
-          echo "SKIP_CI_CHECKS=${params.SKIP_CI_CHECKS}"
-          echo "SKIP_IMAGE_BUILD=${params.SKIP_IMAGE_BUILD}"
+          echo "RUN_LINT=${params.RUN_LINT}"
+          echo "RUN_UNIT_TESTS=${params.RUN_UNIT_TESTS}"
+          echo "BUILD_DOCKER_IMAGES=${params.BUILD_DOCKER_IMAGES}"
+          echo "PUSH_TO_REGISTRY=${params.PUSH_TO_REGISTRY}"
           echo "IMAGE_TAG=${env.IMAGE_TAG ?: '(keeping current deployment images)'}"
         }
       }
@@ -103,7 +100,7 @@ pipeline {
 
     stage('Lint') {
       when {
-        expression { return !params.DEPLOY_ONLY && !params.SKIP_CI_CHECKS }
+        expression { return params.RUN_LINT }
       }
       steps {
         sh '''
@@ -122,14 +119,21 @@ pipeline {
 
     stage('Unit Tests') {
     when {
-        expression { return !params.DEPLOY_ONLY && !params.SKIP_CI_CHECKS }
+        expression { return params.RUN_UNIT_TESTS }
     }
     steps {
         sh '''
             set -e
             for svc in $SERVICES; do
                 cd services/$svc
-                . venv/bin/activate
+                if [ ! -x venv/bin/python ]; then
+                    python3 -m venv venv
+                    . venv/bin/activate
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
+                else
+                    . venv/bin/activate
+                fi
                 pytest tests --cov=apps --cov-fail-under=80
                 deactivate
                 cd ../..
@@ -140,7 +144,7 @@ pipeline {
 
     stage('Build Docker Images') {
       when {
-        expression { return !params.LOCAL_ONLY && !params.DEPLOY_ONLY && !params.SKIP_IMAGE_BUILD }
+        expression { return !params.LOCAL_ONLY && params.BUILD_DOCKER_IMAGES }
       }
       steps {
         sh '''
@@ -155,7 +159,7 @@ pipeline {
 
     stage('Push to Registry') {
       when {
-        expression { return !params.LOCAL_ONLY && !params.DEPLOY_ONLY && !params.SKIP_IMAGE_BUILD && params.PUSH_TO_REGISTRY }
+        expression { return !params.LOCAL_ONLY && params.BUILD_DOCKER_IMAGES && params.PUSH_TO_REGISTRY }
       }
       steps {
         withCredentials([usernamePassword(credentialsId: params.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
@@ -173,7 +177,7 @@ pipeline {
 
     stage('Load Images Into Kubernetes') {
       when {
-        expression { return !params.LOCAL_ONLY && !params.DEPLOY_ONLY && !params.SKIP_IMAGE_BUILD && !params.PUSH_TO_REGISTRY }
+        expression { return !params.LOCAL_ONLY && params.BUILD_DOCKER_IMAGES && !params.PUSH_TO_REGISTRY }
       }
       steps {
         sh '''
@@ -239,12 +243,21 @@ pipeline {
 
           dump_k8s_diagnostics() {
             echo "---- Kubernetes diagnostics ----"
+            kubectl -n flowdesk get all -o wide || true
             kubectl -n flowdesk get pods -o wide || true
             kubectl -n flowdesk get pvc || true
+            kubectl -n flowdesk get ingress || true
             kubectl -n flowdesk get events --sort-by=.lastTimestamp || true
-            kubectl -n flowdesk describe statefulset/postgres || true
-            kubectl -n flowdesk describe pod -l app=postgres || true
-            kubectl -n flowdesk logs statefulset/postgres --tail=120 || true
+            for workload in statefulset/postgres deployment/redis deployment/auth-service deployment/workflow-service deployment/approval-service deployment/notification-service deployment/analytics-service deployment/celery-worker deployment/celery-beat deployment/nginx; do
+              echo "---- Describe ${workload} ----"
+              kubectl -n flowdesk describe "$workload" || true
+            done
+            for pod in $(kubectl -n flowdesk get pods --no-headers 2>/dev/null | awk '{ split($2, ready, "/"); if ($3 != "Running" || ready[1] != ready[2]) print $1 }'); do
+              echo "---- Describe pod/${pod} ----"
+              kubectl -n flowdesk describe pod "$pod" || true
+              echo "---- Logs pod/${pod} ----"
+              kubectl -n flowdesk logs pod/"$pod" --all-containers --tail=120 || true
+            done
             echo "---- End Kubernetes diagnostics ----"
           }
           diagnostics_on_exit() {
@@ -255,6 +268,27 @@ pipeline {
             exit "$status"
           }
           trap diagnostics_on_exit 0
+
+          current_auth_image=""
+          current_workflow_image=""
+          current_approval_image=""
+          current_notification_image=""
+          current_analytics_image=""
+          current_celery_workflow_image=""
+          current_celery_approval_image=""
+          current_celery_notification_image=""
+          current_celery_beat_image=""
+          if [ -z "${IMAGE_TAG:-}" ]; then
+            current_auth_image="$(kubectl -n flowdesk get deployment/auth-service -o jsonpath='{.spec.template.spec.containers[?(@.name=="auth-service")].image}' 2>/dev/null || true)"
+            current_workflow_image="$(kubectl -n flowdesk get deployment/workflow-service -o jsonpath='{.spec.template.spec.containers[?(@.name=="workflow-service")].image}' 2>/dev/null || true)"
+            current_approval_image="$(kubectl -n flowdesk get deployment/approval-service -o jsonpath='{.spec.template.spec.containers[?(@.name=="approval-service")].image}' 2>/dev/null || true)"
+            current_notification_image="$(kubectl -n flowdesk get deployment/notification-service -o jsonpath='{.spec.template.spec.containers[?(@.name=="notification-service")].image}' 2>/dev/null || true)"
+            current_analytics_image="$(kubectl -n flowdesk get deployment/analytics-service -o jsonpath='{.spec.template.spec.containers[?(@.name=="analytics-service")].image}' 2>/dev/null || true)"
+            current_celery_workflow_image="$(kubectl -n flowdesk get deployment/celery-worker -o jsonpath='{.spec.template.spec.containers[?(@.name=="celery-workflow")].image}' 2>/dev/null || true)"
+            current_celery_approval_image="$(kubectl -n flowdesk get deployment/celery-worker -o jsonpath='{.spec.template.spec.containers[?(@.name=="celery-approval")].image}' 2>/dev/null || true)"
+            current_celery_notification_image="$(kubectl -n flowdesk get deployment/celery-worker -o jsonpath='{.spec.template.spec.containers[?(@.name=="celery-notification")].image}' 2>/dev/null || true)"
+            current_celery_beat_image="$(kubectl -n flowdesk get deployment/celery-beat -o jsonpath='{.spec.template.spec.containers[?(@.name=="celery-beat")].image}' 2>/dev/null || true)"
+          fi
 
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/configmap.yaml
@@ -286,20 +320,36 @@ pipeline {
             kubectl -n flowdesk set image deployment/celery-worker celery-workflow=${REGISTRY}/${IMAGE_NAMESPACE}/workflow-service:${IMAGE_TAG} celery-approval=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG} celery-notification=${REGISTRY}/${IMAGE_NAMESPACE}/notification-service:${IMAGE_TAG}
             kubectl -n flowdesk set image deployment/celery-beat celery-beat=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG}
           else
-            echo "Skipping application image updates; keeping currently deployed images."
+            echo "Restoring currently deployed application images after manifest apply."
+            [ -n "$current_auth_image" ] && kubectl -n flowdesk set image deployment/auth-service auth-service="$current_auth_image"
+            [ -n "$current_workflow_image" ] && kubectl -n flowdesk set image deployment/workflow-service workflow-service="$current_workflow_image"
+            [ -n "$current_approval_image" ] && kubectl -n flowdesk set image deployment/approval-service approval-service="$current_approval_image"
+            [ -n "$current_notification_image" ] && kubectl -n flowdesk set image deployment/notification-service notification-service="$current_notification_image"
+            [ -n "$current_analytics_image" ] && kubectl -n flowdesk set image deployment/analytics-service analytics-service="$current_analytics_image"
+            [ -n "$current_celery_workflow_image" ] && kubectl -n flowdesk set image deployment/celery-worker celery-workflow="$current_celery_workflow_image"
+            [ -n "$current_celery_approval_image" ] && kubectl -n flowdesk set image deployment/celery-worker celery-approval="$current_celery_approval_image"
+            [ -n "$current_celery_notification_image" ] && kubectl -n flowdesk set image deployment/celery-worker celery-notification="$current_celery_notification_image"
+            [ -n "$current_celery_beat_image" ] && kubectl -n flowdesk set image deployment/celery-beat celery-beat="$current_celery_beat_image"
           fi
           kubectl -n flowdesk rollout restart deployment/nginx
 
-          kubectl -n flowdesk rollout status statefulset/postgres --timeout=180s
-          kubectl -n flowdesk rollout status deployment/redis --timeout=180s
-          kubectl -n flowdesk rollout status deployment/auth-service --timeout=300s
-          kubectl -n flowdesk rollout status deployment/workflow-service --timeout=300s
-          kubectl -n flowdesk rollout status deployment/approval-service --timeout=300s
-          kubectl -n flowdesk rollout status deployment/notification-service --timeout=300s
-          kubectl -n flowdesk rollout status deployment/analytics-service --timeout=300s
-          kubectl -n flowdesk rollout status deployment/celery-worker --timeout=300s
-          kubectl -n flowdesk rollout status deployment/celery-beat --timeout=300s
-          kubectl -n flowdesk rollout status deployment/nginx --timeout=180s
+          wait_for_rollout() {
+            resource="$1"
+            timeout="$2"
+            echo "Waiting for rollout: ${resource}"
+            kubectl -n flowdesk rollout status "$resource" --timeout="$timeout"
+          }
+
+          wait_for_rollout statefulset/postgres 180s
+          wait_for_rollout deployment/redis 180s
+          wait_for_rollout deployment/auth-service 300s
+          wait_for_rollout deployment/workflow-service 300s
+          wait_for_rollout deployment/approval-service 300s
+          wait_for_rollout deployment/notification-service 300s
+          wait_for_rollout deployment/analytics-service 300s
+          wait_for_rollout deployment/celery-worker 300s
+          wait_for_rollout deployment/celery-beat 300s
+          wait_for_rollout deployment/nginx 180s
         '''
       }
     }

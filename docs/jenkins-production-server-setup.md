@@ -54,6 +54,14 @@ In `Build with Parameters`, set:
 
 This enables build/deploy/smoke stages. The push stage runs only when `PUSH_TO_REGISTRY=true`.
 
+You can also choose whether to run the earlier stages:
+
+1. `RUN_LINT=true|false`
+2. `RUN_UNIT_TESTS=true|false`
+3. `BUILD_DOCKER_IMAGES=true|false`
+
+When `BUILD_DOCKER_IMAGES=false`, image push/import is skipped. Set `DEPLOY_IMAGE_TAG` to an existing image tag if you want Kubernetes deployments updated to that tag; leave it blank to re-apply manifests and keep currently deployed app images.
+
 ## 5. Registry configuration checklist
 
 Confirm these `Jenkinsfile` environment values are correct for production:

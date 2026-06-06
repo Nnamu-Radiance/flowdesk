@@ -115,15 +115,14 @@ If Jenkins and Kubernetes are on the same server and Kubernetes can use Jenkins'
 
 This builds images locally, skips Docker Hub, imports the built images into the Kubernetes runtime, deploys to Kubernetes, and runs smoke tests. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`; if those tools are not available, use a registry instead.
 
-To debug only Kubernetes manifests/deploy/smoke tests after lint, unit tests, and image build have already passed, run `Build with Parameters` with:
+To choose which parts of the pipeline run, use these checkboxes in `Build with Parameters`:
 
-1. `LOCAL_ONLY=false`
-2. `DEPLOY_ONLY=true`
-3. `PUSH_TO_REGISTRY=false`
-4. `DEPLOY_IMAGE_TAG=<previous successful image tag>` if you want to repoint app deployments to a known tag
-5. Leave `DEPLOY_IMAGE_TAG` blank if you only want to re-apply Kubernetes manifests and keep the currently deployed app images
+1. `RUN_LINT=true|false`
+2. `RUN_UNIT_TESTS=true|false`
+3. `BUILD_DOCKER_IMAGES=true|false`
+4. `PUSH_TO_REGISTRY=true|false`
 
-For a faster run that still rebuilds images, use `SKIP_CI_CHECKS=true` and keep `SKIP_IMAGE_BUILD=false`.
+For example, to debug only Kubernetes deploy and smoke tests after earlier stages already passed, set `LOCAL_ONLY=false`, `RUN_LINT=false`, `RUN_UNIT_TESTS=false`, `BUILD_DOCKER_IMAGES=false`, and `PUSH_TO_REGISTRY=false`. Set `DEPLOY_IMAGE_TAG` to an existing image tag if you want to update app deployments to that tag; leave it blank to re-apply manifests and keep the currently deployed app images.
 
 For bundled same-server k3s deploys, the Jenkins container also needs the host kubeconfig. The included Compose service mounts `/etc/rancher/k3s/k3s.yaml` and sets `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`, so recreate Jenkins after pulling changes to `docker-compose.yml`:
 
