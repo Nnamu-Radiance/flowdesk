@@ -94,7 +94,15 @@ pipeline {
         sh '''
           set -e
           if ! command -v docker-compose >/dev/null 2>&1; then
-            pip3 install -q -i https://pypi.tuna.tsinghua.edu.cn/simple docker-compose
+            echo "Downloading docker-compose v2 binary..."
+            arch=$(uname -m)
+            curl -fsSL \
+              "https://github.com/docker/compose/releases/download/v2.27.0/docker-compose-linux-${arch}" \
+              -o /usr/local/bin/docker-compose \
+            || curl -fsSL \
+              "https://get.daocloud.io/docker/compose/releases/download/v2.27.0/docker-compose-linux-${arch}" \
+              -o /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
           fi
           docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --remove-orphans
         '''
@@ -116,7 +124,8 @@ pipeline {
           until curl -fsS "${base_url}/" > /dev/null 2>&1; do
             if [ "$elapsed" -ge "$max_wait" ]; then
               echo "Timeout: nginx did not respond within ${max_wait}s"
-              docker-compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=40
+              docker logs flowdesk-nginx --tail=40 2>&1 || true
+              docker logs flowdesk-auth --tail=20 2>&1 || true
               exit 1
             fi
             sleep 5
@@ -139,9 +148,12 @@ pipeline {
     failure {
       sh '''
         echo "=== Container status ==="
-        docker-compose -f docker-compose.yml -f docker-compose.ci.yml ps || true
+        docker ps --filter "label=com.docker.compose.project=flowdesk" || true
         echo "=== Recent logs ==="
-        docker-compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=60 || true
+        for name in flowdesk-auth flowdesk-workflow flowdesk-approval flowdesk-notification flowdesk-analytics flowdesk-nginx flowdesk-postgres flowdesk-redis; do
+          echo "--- $name ---"
+          docker logs "$name" --tail=30 2>&1 || true
+        done
       '''
     }
     always {
