@@ -69,7 +69,9 @@ Current image naming format:
 1. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:${IMAGE_TAG}`
 2. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:latest`
 
-For same-server deployment without Docker Hub, Jenkins still builds these image names locally, then imports them into the Kubernetes runtime before deployment. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`. If pods enter `ImagePullBackOff`, the import step did not run successfully; either fix runtime image import access or enable `PUSH_TO_REGISTRY=true`.
+For same-server deployment without Docker Hub, Jenkins still builds these image names locally, then imports them into the Kubernetes runtime before deployment. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`. If pods enter `ImagePullBackOff`, the import step did not run successfully; either fix runtime image import access or enable `PUSH_TO_REGISTRY=true`.
+
+When the k3s containerd socket is mounted as `root:root` with mode `660`, the Jenkins job user must be in group `0` or the import command fails with `permission denied`.
 
 If the push fails with `insufficient_scope: authorization failed`, verify:
 

@@ -113,7 +113,9 @@ If Jenkins and Kubernetes are on the same server and Kubernetes can use Jenkins'
 1. `LOCAL_ONLY=false`
 2. `PUSH_TO_REGISTRY=false`
 
-This builds images locally, skips Docker Hub, imports the built images into the Kubernetes runtime, deploys to Kubernetes, and runs smoke tests. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`; if those tools are not available, use a registry instead.
+This builds images locally, skips Docker Hub, imports the built images into the Kubernetes runtime, deploys to Kubernetes, and runs smoke tests. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`; if those tools are not available, use a registry instead.
+
+The bundled Jenkins Compose service adds Jenkins to group `0` because the k3s containerd socket is commonly mounted as `root:root` with mode `660`. If the pipeline prints `/run/k3s/containerd/containerd.sock` as another group, add that host group id to the Jenkins service as well.
 
 When using the bundled Docker Compose Jenkins service, rebuild/recreate Jenkins after changing the runtime mounts or Jenkins user/security settings:
 

@@ -379,6 +379,9 @@ services:
       dockerfile: Dockerfile.jenkins
     container_name: flowdesk-jenkins
     user: root
+    group_add:
+      # k3s containerd socket is commonly root:root 660; add group 0 so Jenkins jobs can import images.
+      - "0"
     privileged: true
     security_opt:
       - no-new-privileges:false
