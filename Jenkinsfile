@@ -166,6 +166,11 @@ pipeline {
         sh '''
           set -e
           echo "---- Kubernetes preflight ----"
+          default_kubeconfig="/etc/rancher/k3s/k3s.yaml"
+          if [ -z "${KUBECONFIG:-}" ] && [ -r "$default_kubeconfig" ]; then
+            export KUBECONFIG="$default_kubeconfig"
+          fi
+
           if [ -n "${KUBECONFIG:-}" ]; then
             echo "KUBECONFIG=${KUBECONFIG}"
             if [ ! -r "${KUBECONFIG}" ]; then
@@ -173,7 +178,9 @@ pipeline {
               exit 1
             fi
           else
-            echo "KUBECONFIG is not set; kubectl will use its default config search path."
+            echo "KUBECONFIG is not set and $default_kubeconfig is not readable."
+            echo "Recreate Jenkins with the host k3s kubeconfig mounted: /etc/rancher/k3s:/etc/rancher/k3s:ro."
+            exit 1
           fi
           kubectl version --client=true
           if ! kubectl get nodes -o wide; then

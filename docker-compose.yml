@@ -400,7 +400,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # Mount k3s container runtime access so Jenkins can import locally built images without Docker Hub
       - /usr/local/bin/k3s:/usr/local/bin/k3s:ro
-      - /etc/rancher/k3s:/etc/rancher/k3s:ro
+      - /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro
       - /run/k3s/containerd/containerd.sock:/run/k3s/containerd/containerd.sock
 
 networks:
