@@ -131,15 +131,17 @@ pipeline {
         sh '''
           set -e
           mkdir -p .k8s-images
+          id
+          ls -l /run/k3s/containerd/containerd.sock || true
 
           import_image_archive() {
             archive="$1"
             if command -v k3s >/dev/null 2>&1; then
-              k3s ctr images import "$archive" || { command -v sudo >/dev/null 2>&1 && sudo k3s ctr images import "$archive"; }
+              k3s ctr images import "$archive"
             elif command -v ctr >/dev/null 2>&1; then
-              ctr -n k8s.io images import "$archive" || { command -v sudo >/dev/null 2>&1 && sudo ctr -n k8s.io images import "$archive"; }
+              ctr -n k8s.io images import "$archive"
             elif command -v nerdctl >/dev/null 2>&1; then
-              nerdctl -n k8s.io load -i "$archive" || { command -v sudo >/dev/null 2>&1 && sudo nerdctl -n k8s.io load -i "$archive"; }
+              nerdctl -n k8s.io load -i "$archive"
             else
               echo "No supported Kubernetes image import tool found. Install k3s, ctr, or nerdctl on the Jenkins agent, or run with PUSH_TO_REGISTRY=true."
               exit 1
