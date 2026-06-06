@@ -93,6 +93,9 @@ pipeline {
       steps {
         sh '''
           set -e
+          if ! command -v docker-compose >/dev/null 2>&1; then
+            pip3 install -q -i https://pypi.tuna.tsinghua.edu.cn/simple docker-compose
+          fi
           docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --remove-orphans
         '''
       }
