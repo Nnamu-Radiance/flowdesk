@@ -195,21 +195,7 @@ class ApprovalService:
     def publish_requested(chain: ApprovalChain, step: ApprovalStep, correlation_id: str | None = None):
         return publish_event(
             "approval.requested",
-            {
-                "workflow_id": chain.workflow_id,
-                "step_number": step.step_number,
-                "total_steps": chain.total_steps,
-                "assignee_id": step.assignee_id,
-                "approver_id": step.assignee_id,
-                "student_id": chain.student_id,
-                "role_display_name": step.role_display_name,
-                "student_name": chain.student_name,
-                "student_matricule": chain.student_matricule,
-                "student_faculty": chain.student_faculty,
-                "workflow_type_name": chain.workflow_type_name,
-                "deadline": chain.deadline.isoformat() if chain.deadline else None,
-                "documents": chain.documents,
-            },
+            {"workflow_id": chain.workflow_id, "approver_id": step.assignee_id},
             "approval-service",
             correlation_id=correlation_id,
         )
@@ -372,6 +358,11 @@ class ApprovalService:
             status=ApprovalStep.Status.ACTIVE,
             step_number=chain.current_step_number,
         ).first()
+        if not step:
+            step = chain.steps.select_for_update().filter(
+                assignee_id=approver_id,
+                status=ApprovalStep.Status.PENDING,
+            ).order_by("step_number").first()
         if not step:
             raise PermissionError("Only the active assignee can reassign this step")
         old_assignee_id = step.assignee_id

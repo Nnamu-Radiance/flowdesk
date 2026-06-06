@@ -3,6 +3,7 @@ from django.urls import path
 from apps.approvals.views import (
     ApprovalDecisionView,
     ApprovalDocumentsView,
+    ChainApproveView,
     HistoryView,
     LegacyApprovalDecisionView,
     LegacyHistoryView,
@@ -13,6 +14,7 @@ from apps.approvals.views import (
 
 urlpatterns = [
     path("pending/", PendingApprovalsView.as_view(), name="approval-pending"),
+    path("<int:chain_id>/approve/", ChainApproveView.as_view(), name="approval-approve"),
     path("<int:workflow_id>/documents/", ApprovalDocumentsView.as_view(), name="approval-documents"),
     path("<int:workflow_id>/decide/", ApprovalDecisionView.as_view(), name="approval-decide"),
     path("<int:workflow_id>/reassign/", ReassignView.as_view(), name="approval-reassign"),
