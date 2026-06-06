@@ -115,12 +115,57 @@ If Jenkins and Kubernetes are on the same server and Kubernetes can use Jenkins'
 
 This builds images locally, skips Docker Hub, imports the built images into the Kubernetes runtime, deploys to Kubernetes, and runs smoke tests. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`; if those tools are not available, use a registry instead.
 
+For bundled same-server k3s deploys, the Jenkins container also needs the host kubeconfig. The included Compose service mounts `/etc/rancher/k3s` and sets `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`, so recreate Jenkins after pulling changes to `docker-compose.yml`:
+
+```bash
+docker compose up -d --build --force-recreate --no-deps jenkins
+docker exec flowdesk-jenkins kubectl get nodes -o wide
+```
+
 The bundled Jenkins Compose service adds Jenkins to group `0` because the k3s containerd socket is commonly mounted as `root:root` with mode `660`. If the pipeline prints `/run/k3s/containerd/containerd.sock` as another group, add that host group id to the Jenkins service as well.
 
 When using the bundled Docker Compose Jenkins service, rebuild/recreate Jenkins after changing the runtime mounts or Jenkins user/security settings:
 
 ```bash
 docker compose up -d --build --force-recreate jenkins
+```
+
+If the rebuild fails because the server cannot resolve package repositories such as `deb.debian.org`, recreate Jenkins from the existing local image and apply the Jenkins group change inside the container:
+
+```bash
+cd /var/www/flowdesk
+docker compose up -d --no-build --force-recreate --no-deps jenkins
+docker exec -u root flowdesk-jenkins usermod -aG root jenkins
+docker restart flowdesk-jenkins
+docker exec -u jenkins flowdesk-jenkins id
+```
+
+The final `id` output must include `0(root)`. If it does not, the Jenkins job will still be unable to open `/run/k3s/containerd/containerd.sock`.
+
+If there is no existing Jenkins image and Docker reports `No such image: flowdesk-jenkins:latest`, the image must be rebuilt. The bundled Compose file builds Jenkins with host networking so package repository DNS uses the host network:
+
+```bash
+cd /var/www/flowdesk
+docker compose build --no-cache jenkins
+docker compose up -d --force-recreate --no-deps jenkins
+docker exec -u jenkins flowdesk-jenkins id
+```
+
+The bundled Flowdesk Jenkins service uses host networking and runs Jenkins on port `8081` by default so it does not conflict with another Jenkins instance on port `8080`.
+
+```bash
+cd /var/www/flowdesk
+docker compose up -d --force-recreate --no-deps jenkins
+docker exec -u jenkins flowdesk-jenkins id
+```
+
+Then open Flowdesk Jenkins on port `8081`.
+
+If the Jenkins setup wizard says the instance is offline, Jenkins cannot reach the update center from inside the container. The bundled Compose service sets public DNS resolvers for Jenkins. After updating Compose, recreate Jenkins:
+
+```bash
+cd /var/www/flowdesk
+docker compose up -d --force-recreate --no-deps jenkins
 ```
 
 ## 7. Verify the job is running your latest commit
