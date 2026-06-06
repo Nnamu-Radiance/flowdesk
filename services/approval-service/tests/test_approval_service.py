@@ -1,8 +1,13 @@
 import pytest
-from rest_framework.test import APIClient
+from datetime import timedelta
 from unittest.mock import ANY, patch
 
+from django.utils import timezone
+from rest_framework import exceptions
+from rest_framework.test import APIClient, APIRequestFactory
+
 from apps.approvals.models import ApprovalChain, ApprovalStep, ApprovalRecord
+from apps.approvals.serializers import ApprovalChainSerializer, ApprovalRecordSerializer
 
 
 @pytest.fixture
@@ -55,12 +60,20 @@ def test_approval_decision(api_client):
 def test_reassign(api_client):
     chain = ApprovalChain.objects.create(workflow_id=101, name="Chain 1")
     step = ApprovalStep.objects.create(chain=chain, order=1, approver_id=1, status="pending")
-    
-    response = api_client.post(f"/api/approvals/{chain.id}/reassign/", {"assignee_id": 99})
+
+    with patch("apps.approvals.services.publish_event") as mock_publish:
+        response = api_client.post(f"/api/approvals/{chain.id}/reassign/", {"assignee_id": 99})
+
     assert response.status_code == 200
     step.refresh_from_db()
     assert step.approver_id == 99
     assert response.data["assignee_id"] == 99
+    mock_publish.assert_called_once_with(
+        "approval.requested",
+        {"workflow_id": chain.workflow_id, "approver_id": 99},
+        "approval-service",
+        correlation_id=ANY,
+    )
 
 
 @pytest.mark.django_db
@@ -83,6 +96,62 @@ def test_approval_service_logic():
         step2.refresh_from_db()
         assert step2.status == "approved"
         assert mock_pub.call_count == 3
+
+
+@pytest.mark.django_db
+def test_approval_service_return_marks_chain_and_publishes_event():
+    from apps.approvals.services import ApprovalService
+
+    chain = ApprovalChain.objects.create(
+        workflow_id=305,
+        workflow_type_name="Transcript",
+        student_id=77,
+        total_steps=2,
+    )
+    current = ApprovalStep.objects.create(
+        chain=chain,
+        order=1,
+        approver_id=1,
+        role_required="registrar",
+        role_display_name="Registrar",
+        status=ApprovalStep.Status.ACTIVE,
+    )
+    pending = ApprovalStep.objects.create(
+        chain=chain,
+        order=2,
+        approver_id=2,
+        role_required="dean",
+        role_display_name="Dean",
+        status=ApprovalStep.Status.PENDING,
+    )
+
+    with patch("apps.approvals.services.publish_event") as mock_publish:
+        result = ApprovalService.decision(
+            chain,
+            approver_id=1,
+            action="return",
+            comments="Please update the supporting document.",
+            send_feedback_to_student=True,
+            correlation_id="corr-return",
+        )
+
+    chain.refresh_from_db()
+    current.refresh_from_db()
+    pending.refresh_from_db()
+    assert result == "returned"
+    assert chain.status == ApprovalChain.Status.RETURNED
+    assert current.status == ApprovalStep.Status.RETURNED
+    assert pending.status == ApprovalStep.Status.VOID
+    mock_publish.assert_called_once()
+    event_name, payload, source = mock_publish.call_args.args
+    assert event_name == "approval.returned"
+    assert payload["workflow_id"] == chain.workflow_id
+    assert payload["student_id"] == 77
+    assert payload["workflow_type_name"] == "Transcript"
+    assert payload["step_number"] == 1
+    assert payload["send_feedback_to_student"] is True
+    assert source == "approval-service"
+    assert mock_publish.call_args.kwargs["correlation_id"] == "corr-return"
 
 
 @pytest.mark.django_db
@@ -173,3 +242,92 @@ def test_reassign_not_found(api_client):
 def test_chain_approve_not_found(api_client):
     response = api_client.post("/api/approvals/9999/approve/", {"comments": "ok"})
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_chain_serializer_reports_sla_and_remaining_time():
+    now = timezone.now()
+    chain = ApprovalChain.objects.create(
+        workflow_id=301,
+        workflow_type_name="Transcript",
+        deadline=now + timedelta(days=2, hours=3),
+        total_steps=1,
+    )
+    ApprovalChain.objects.filter(pk=chain.pk).update(created_at=now - timedelta(days=1))
+    chain.refresh_from_db()
+    ApprovalStep.objects.create(
+        chain=chain,
+        order=1,
+        approver_id=10,
+        role_required="registrar",
+        role_display_name="Registrar",
+        status=ApprovalStep.Status.ACTIVE,
+    )
+
+    data = ApprovalChainSerializer(chain).data
+
+    assert data["workflow_type"] == "Transcript"
+    assert data["name"] == "Transcript Approval Chain"
+    assert data["sla_percentage"] > 0
+    assert data["remaining_time"].endswith("left")
+    assert data["steps"][0]["order"] == 1
+    assert data["steps"][0]["approver_id"] == 10
+
+
+@pytest.mark.django_db
+def test_chain_serializer_reports_overdue_deadline():
+    now = timezone.now()
+    chain = ApprovalChain.objects.create(workflow_id=302, deadline=now - timedelta(hours=1))
+    ApprovalChain.objects.filter(pk=chain.pk).update(created_at=now - timedelta(days=1))
+    chain.refresh_from_db()
+
+    data = ApprovalChainSerializer(chain).data
+
+    assert data["sla_percentage"] == 100
+    assert data["remaining_time"] == "Overdue"
+
+
+@pytest.mark.django_db
+def test_record_serializer_exposes_legacy_approver_and_empty_document_url():
+    record = ApprovalRecord.objects.create(
+        workflow_id=303,
+        step_number=1,
+        actor_id=22,
+        action=ApprovalRecord.Action.COMMENTED,
+        comments="Looks fine",
+    )
+
+    data = ApprovalRecordSerializer(record).data
+
+    assert data["actor_id"] == 22
+    assert data["approver_id"] == 22
+    assert data["annotated_document_url"] == ""
+
+
+def test_jwt_authentication_accepts_bearer_token():
+    from apps.approvals.authentication import JWTLocalAuthentication
+
+    request = APIRequestFactory().get("/api/approvals/pending/", HTTP_AUTHORIZATION="Bearer good-token")
+    with patch("apps.approvals.authentication.validate_jwt", return_value={"user_id": 44, "role": "approver"}):
+        user, payload = JWTLocalAuthentication().authenticate(request)
+
+    assert user.id == 44
+    assert user.role == "approver"
+    assert payload["user_id"] == 44
+
+
+def test_jwt_authentication_ignores_missing_bearer_token():
+    from apps.approvals.authentication import JWTLocalAuthentication
+
+    request = APIRequestFactory().get("/api/approvals/pending/")
+
+    assert JWTLocalAuthentication().authenticate(request) is None
+
+
+def test_jwt_authentication_rejects_invalid_token():
+    from apps.approvals.authentication import JWTLocalAuthentication
+
+    request = APIRequestFactory().get("/api/approvals/pending/", HTTP_AUTHORIZATION="Bearer bad-token")
+    with patch("apps.approvals.authentication.validate_jwt", side_effect=ValueError("bad")):
+        with pytest.raises(exceptions.AuthenticationFailed):
+            JWTLocalAuthentication().authenticate(request)
