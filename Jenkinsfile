@@ -2,11 +2,6 @@ pipeline {
   agent any
 
   parameters {
-    booleanParam(
-      name: 'LOCAL_ONLY',
-      defaultValue: false,
-      description: 'Run only checkout/lint/tests and skip image build, registry push, Kubernetes deploy, and smoke tests.'
-    )
     string(
       name: 'SMOKE_BASE_URL',
       defaultValue: 'http://localhost',
@@ -71,9 +66,6 @@ pipeline {
 }
 
     stage('Build Docker Images') {
-      when {
-        expression { return !params.LOCAL_ONLY }
-      }
       steps {
         sh '''
           set -e
@@ -86,9 +78,6 @@ pipeline {
     }
 
     stage('Push to Registry') {
-      when {
-        expression { return !params.LOCAL_ONLY }
-      }
       steps {
         sh '''
           set -e
@@ -104,9 +93,6 @@ pipeline {
     }
 
     stage('Deploy to Kubernetes') {
-      when {
-        expression { return !params.LOCAL_ONLY && fileExists('k8s/kustomization.yaml') }
-      }
       steps {
         sh '''
           kubectl apply -f k8s/namespace.yaml
@@ -148,9 +134,6 @@ pipeline {
     }
 
     stage('Smoke Tests') {
-      when {
-        expression { return !params.LOCAL_ONLY }
-      }
       steps {
         sh '''
           set -e
