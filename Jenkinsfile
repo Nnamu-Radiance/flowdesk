@@ -150,7 +150,7 @@ pipeline {
         sh '''
           set -e
           for svc in $SERVICES; do
-            docker build --network=host -t ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG} services/$svc
+            docker build --network=host -f services/$svc/Dockerfile -t ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG} .
             docker tag ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:latest
           done
         '''

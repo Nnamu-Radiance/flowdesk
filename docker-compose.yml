@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowdesk}
       POSTGRES_DB: ${POSTGRES_DB:-flowdesk_db}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:${FLOWDESK_POSTGRES_PORT:-15432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -22,6 +22,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: host
     container_name: flowdesk-web
     command: sh -c "python manage.py migrate && python manage.py collectstatic --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
     environment:
@@ -48,7 +49,7 @@ services:
     container_name: flowdesk-redis
     command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "127.0.0.1:${FLOWDESK_REDIS_PORT:-16380}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -61,8 +62,9 @@ services:
 
   auth-service:
     build:
-      context: ./services/auth-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/auth-service/Dockerfile
+      network: host
     container_name: flowdesk-auth
     command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8001 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
     environment:
@@ -88,7 +90,7 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,auth-service,workflow-service,approval-service,notification-service,analytics-service,nginx}
       PYTHONPATH: /app
     ports:
-      - "8001:8001"
+      - "${FLOWDESK_AUTH_PORT:-18001}:8001"
     volumes:
       - ./services/auth-service:/app
       - ./shared:/app/shared
@@ -102,8 +104,9 @@ services:
 
   workflow-service:
     build:
-      context: ./services/workflow-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/workflow-service/Dockerfile
+      network: host
     container_name: flowdesk-workflow
     command: sh -c "mkdir -p /app/media/workflow_config /app/media/workflow_docs /app/media/profiles && chmod -R 777 /app/media || true && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8002 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
     environment:
@@ -118,7 +121,7 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,auth-service,workflow-service,approval-service,notification-service,analytics-service,nginx}
       PYTHONPATH: /app
     ports:
-      - "8002:8002"
+      - "${FLOWDESK_WORKFLOW_PORT:-18002}:8002"
     volumes:
       - ./services/workflow-service:/app
       - ./shared:/app/shared
@@ -133,8 +136,9 @@ services:
 
   approval-service:
     build:
-      context: ./services/approval-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/approval-service/Dockerfile
+      network: host
     container_name: flowdesk-approval
     command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8003 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
     environment:
@@ -149,7 +153,7 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,auth-service,workflow-service,approval-service,notification-service,analytics-service,nginx}
       PYTHONPATH: /app
     ports:
-      - "8003:8003"
+      - "${FLOWDESK_APPROVAL_PORT:-18003}:8003"
     volumes:
       - ./services/approval-service:/app
       - ./shared:/app/shared
@@ -163,8 +167,9 @@ services:
 
   notification-service:
     build:
-      context: ./services/notification-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+      network: host
     container_name: flowdesk-notification
     command: sh -c "python manage.py migrate && gunicorn config.asgi:application --bind 0.0.0.0:8004 --worker-class uvicorn.workers.UvicornWorker --workers 2 --timeout 120 --access-logfile - --error-logfile -"
     environment:
@@ -179,7 +184,7 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,auth-service,workflow-service,approval-service,notification-service,analytics-service,nginx}
       PYTHONPATH: /app
     ports:
-      - "8004:8004"
+      - "${FLOWDESK_NOTIFICATION_PORT:-18004}:8004"
     volumes:
       - ./services/notification-service:/app
       - ./shared:/app/shared
@@ -193,8 +198,9 @@ services:
 
   analytics-service:
     build:
-      context: ./services/analytics-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/analytics-service/Dockerfile
+      network: host
     container_name: flowdesk-analytics
     command: sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8005 --workers 3 --timeout 120 --access-logfile - --error-logfile -"
     environment:
@@ -207,7 +213,7 @@ services:
       ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,auth-service,workflow-service,approval-service,notification-service,analytics-service,nginx}
       PYTHONPATH: /app
     ports:
-      - "8005:8005"
+      - "${FLOWDESK_ANALYTICS_PORT:-18005}:8005"
     volumes:
       - ./services/analytics-service:/app
       - ./shared:/app/shared
@@ -221,8 +227,9 @@ services:
 
   celery-workflow:
     build:
-      context: ./services/workflow-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/workflow-service/Dockerfile
+      network: host
     container_name: flowdesk-celery-workflow
     command: sh -c "mkdir -p /app/media/workflow_config /app/media/workflow_docs && chmod -R 777 /app/media || true && python manage.py migrate && celery -A config worker -l info -Q workflow -c 4"
     environment:
@@ -248,8 +255,9 @@ services:
 
   celery-approval:
     build:
-      context: ./services/approval-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/approval-service/Dockerfile
+      network: host
     container_name: flowdesk-celery-approval
     command: sh -c "python manage.py migrate && celery -A config worker -l info -Q approval -c 4"
     environment:
@@ -274,8 +282,9 @@ services:
 
   celery-notification:
     build:
-      context: ./services/notification-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/notification-service/Dockerfile
+      network: host
     container_name: flowdesk-celery-notification
     command: sh -c "python manage.py migrate && celery -A config worker -l info -Q notification -c 2"
     environment:
@@ -300,8 +309,9 @@ services:
 
   celery-beat:
     build:
-      context: ./services/approval-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: services/approval-service/Dockerfile
+      network: host
     container_name: flowdesk-celery-beat
     command: sh -c "python manage.py migrate && celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
     environment:
@@ -330,8 +340,8 @@ services:
     image: nginx:alpine
     container_name: flowdesk-nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - "${FLOWDESK_HTTP_PORT:-18080}:80"
+      - "${FLOWDESK_HTTPS_PORT:-18443}:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
@@ -348,7 +358,7 @@ services:
     image: prom/prometheus:latest
     container_name: flowdesk-prometheus
     ports:
-      - "9091:9090"
+      - "${FLOWDESK_PROMETHEUS_PORT:-19091}:9090"
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/rules.yml:/etc/prometheus/rules.yml
@@ -360,7 +370,7 @@ services:
     image: grafana/grafana:latest
     container_name: flowdesk-grafana
     ports:
-      - "3000:3000"
+      - "${FLOWDESK_GRAFANA_PORT:-13000}:3000"
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_SECURITY_ADMIN_USER: admin
@@ -389,7 +399,7 @@ services:
     network_mode: host
     environment:
       JAVA_OPTS: "-Djenkinsci.plugins.workflow.steps.durabletask.DurableTaskStep.WATCHING_RECURRENCE_PERIOD=1000"
-      JENKINS_OPTS: "--httpPort=${JENKINS_HTTP_PORT:-8081}"
+      JENKINS_OPTS: "--httpPort=${JENKINS_HTTP_PORT:-18081}"
       KUBECONFIG: /etc/rancher/k3s/k3s.yaml
     dns:
       - 1.1.1.1
