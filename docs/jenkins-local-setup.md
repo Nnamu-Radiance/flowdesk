@@ -106,6 +106,15 @@ Expected successful result:
 
 If Jenkins reaches `Push to Registry`, the job is not running with `LOCAL_ONLY=true`. Re-run with parameters and keep `LOCAL_ONLY` checked for local CI.
 
+## Same-server deploy without Docker Hub
+
+If Jenkins and Kubernetes are on the same server and Kubernetes can use Jenkins' locally built Docker images, run `Build with Parameters` with:
+
+1. `LOCAL_ONLY=false`
+2. `PUSH_TO_REGISTRY=false`
+
+This builds images locally, skips Docker Hub, deploys to Kubernetes, and runs smoke tests. If pods fail with `ImagePullBackOff`, the Kubernetes runtime cannot see Jenkins' local Docker images; use a registry or load the images into the cluster runtime.
+
 ## 7. Verify the job is running your latest commit
 
 In build logs, confirm the checkout commit hash matches your branch head.

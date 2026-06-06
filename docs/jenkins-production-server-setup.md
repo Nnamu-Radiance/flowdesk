@@ -9,7 +9,7 @@ Run the full pipeline with `LOCAL_ONLY=false` so Jenkins performs:
 1. Lint
 2. Unit tests
 3. Docker image build
-4. Image push to registry
+4. Optional image push to registry
 5. Kubernetes deployment
 6. Smoke checks
 
@@ -20,6 +20,8 @@ Run the full pipeline with `LOCAL_ONLY=false` so Jenkins performs:
 3. Kubernetes cluster reachable from Jenkins runner
 4. Container registry account (Docker Hub or private registry)
 5. DNS/TLS configured for production ingress domain
+
+If Jenkins and Kubernetes run on the same server and Kubernetes can see the images built by Jenkins, the registry account is optional.
 
 ## 2. Jenkins runtime requirements
 
@@ -47,8 +49,10 @@ For Docker Hub, the username in `DOCKER_CREDENTIALS` must be able to push to the
 In `Build with Parameters`, set:
 
 1. `LOCAL_ONLY=false`
+2. `PUSH_TO_REGISTRY=false` for same-server deploys that use locally built images
+3. `PUSH_TO_REGISTRY=true` only when Kubernetes needs to pull images from Docker Hub or another registry
 
-This enables build/push/deploy/smoke stages.
+This enables build/deploy/smoke stages. The push stage runs only when `PUSH_TO_REGISTRY=true`.
 
 ## 5. Registry configuration checklist
 
@@ -57,12 +61,15 @@ Confirm these `Jenkinsfile` environment values are correct for production:
 1. `REGISTRY` parameter (default `docker.io`)
 2. `IMAGE_NAMESPACE` parameter (default `flowdesk`; set this to your Docker Hub username or organization)
 3. `DOCKER_CREDENTIALS_ID` parameter (default `DOCKER_CREDENTIALS`)
-4. `IMAGE_TAG` (`${BUILD_NUMBER}`)
+4. `PUSH_TO_REGISTRY` parameter (default `false`)
+5. `IMAGE_TAG` (`${BUILD_NUMBER}`)
 
 Current image naming format:
 
 1. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:${IMAGE_TAG}`
 2. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:latest`
+
+For same-server deployment without Docker Hub, Jenkins still builds these image names locally and Kubernetes uses them with `imagePullPolicy: IfNotPresent`. This works when the Kubernetes node runtime can access the same local images. If pods enter `ImagePullBackOff`, your Kubernetes runtime cannot see Jenkins' local Docker images; either enable `PUSH_TO_REGISTRY=true` or load the images into the cluster runtime.
 
 If the push fails with `insufficient_scope: authorization failed`, verify:
 

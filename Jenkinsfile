@@ -22,6 +22,11 @@ pipeline {
       defaultValue: 'DOCKER_CREDENTIALS',
       description: 'Jenkins Username/Password credential id for registry pushes.'
     )
+    booleanParam(
+      name: 'PUSH_TO_REGISTRY',
+      defaultValue: false,
+      description: 'Push built images to REGISTRY. Leave false when Jenkins and Kubernetes use the same local image runtime.'
+    )
     string(
       name: 'SMOKE_BASE_URL',
       defaultValue: 'http://localhost',
@@ -102,7 +107,7 @@ pipeline {
 
     stage('Push to Registry') {
       when {
-        expression { return !params.LOCAL_ONLY }
+        expression { return !params.LOCAL_ONLY && params.PUSH_TO_REGISTRY }
       }
       steps {
         withCredentials([usernamePassword(credentialsId: params.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
