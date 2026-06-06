@@ -1,0 +1,35 @@
+# CI override: strips workspace bind-mounts so containers run purely from built images.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build
+services:
+  web:
+    volumes:
+      - staticfiles_data:/app/staticfiles
+
+  auth-service:
+    volumes: []
+
+  workflow-service:
+    volumes:
+      - media_data:/app/media
+
+  approval-service:
+    volumes: []
+
+  notification-service:
+    volumes: []
+
+  analytics-service:
+    volumes: []
+
+  celery-workflow:
+    volumes:
+      - media_data:/app/media
+
+  celery-approval:
+    volumes: []
+
+  celery-notification:
+    volumes: []
+
+  celery-beat:
+    volumes: []
