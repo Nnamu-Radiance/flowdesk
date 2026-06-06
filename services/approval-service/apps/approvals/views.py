@@ -41,7 +41,7 @@ class PendingApprovalsView(views.APIView):
     def get(self, request):
         chains = ApprovalChain.objects.filter(
             steps__assignee_id=request.user.id,
-            steps__status=ApprovalStep.Status.ACTIVE,
+            steps__status__in=[ApprovalStep.Status.ACTIVE, ApprovalStep.Status.PENDING],
             status=ApprovalChain.Status.ACTIVE,
         ).distinct()
         return response.Response(ApprovalChainSerializer(chains, many=True).data)
@@ -125,11 +125,36 @@ class LegacyApprovalDecisionView(views.APIView):
         return ApprovalDecisionView().post(request, chain.workflow_id)
 
 
+class ChainApproveView(views.APIView):
+    permission_classes = [IsApprover]
+    parser_classes = [JSONParser, MultiPartParser, FormParser]
+
+    def post(self, request, chain_id: int):
+        chain = ApprovalChain.objects.filter(pk=chain_id).first()
+        if not chain:
+            return response.Response({"detail": "Approval chain not found"}, status=status.HTTP_404_NOT_FOUND)
+        comments = request.data.get("comments", "")
+        try:
+            result = ApprovalService.decision(
+                chain,
+                approver_id=request.user.id,
+                action="approve",
+                comments=comments,
+                correlation_id=getattr(request, "correlation_id", None),
+            )
+        except PermissionError as exc:
+            return response.Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        except ValueError as exc:
+            return response.Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return response.Response({"workflow_id": chain.workflow_id, "status": result})
+
+
 class ReassignView(views.APIView):
     permission_classes = [IsApprover]
 
     def post(self, request, workflow_id: int):
-        chain = ApprovalChain.objects.filter(workflow_id=workflow_id).first()
+        chain = (ApprovalChain.objects.filter(workflow_id=workflow_id).first()
+                 or ApprovalChain.objects.filter(pk=workflow_id).first())
         if not chain:
             return response.Response({"detail": "Approval chain not found"}, status=status.HTTP_404_NOT_FOUND)
         new_assignee = request.data.get("new_assignee_id") or request.data.get("assignee_id")
@@ -145,7 +170,7 @@ class ReassignView(views.APIView):
             )
         except PermissionError as exc:
             return response.Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
-        return response.Response({"workflow_id": chain.workflow_id, **result})
+        return response.Response({"workflow_id": chain.workflow_id, "assignee_id": result["new_assignee_id"], **result})
 
 
 class LegacyReassignView(views.APIView):

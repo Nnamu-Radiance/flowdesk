@@ -1,7 +1,6 @@
 import logging
 
 from celery import Task, shared_task
-from django.utils import timezone
 
 from apps.approvals.events import publish_escalation, publish_sla_warning
 from apps.approvals.models import ApprovalChain, ApprovalStep
@@ -25,32 +24,16 @@ def consume_workflow_created(self, event: dict):
 
 @shared_task(bind=True, base=RetryTask, queue="approval")
 def check_sla_deadlines(self):
+    ESCALATION_INTERVAL = 5
     warnings = 0
-    for chain in ApprovalChain.objects.filter(status=ApprovalChain.Status.ACTIVE, deadline__isnull=False):
-        active = chain.steps.filter(status=ApprovalStep.Status.ACTIVE).first()
+    for chain in ApprovalChain.objects.filter(status=ApprovalChain.Status.ACTIVE).order_by("workflow_id"):
+        active = chain.steps.filter(
+            status__in=[ApprovalStep.Status.PENDING, ApprovalStep.Status.ACTIVE]
+        ).order_by("step_number").first()
         if not active:
             continue
-        total = (chain.deadline - chain.created_at).total_seconds()
-        elapsed = (timezone.now() - chain.created_at).total_seconds()
-        pct = int((elapsed / total) * 100) if total > 0 else 100
-        if pct >= 100:
-            overdue_by_hours = max(int((timezone.now() - chain.deadline).total_seconds() // 3600), 0)
-            publish_escalation(chain.workflow_id, active.assignee_id, overdue_by_hours)
-            warnings += 1
-        elif pct >= 75:
-            publish_sla_warning(
-                chain.workflow_id,
-                active.assignee_id,
-                "75%",
-                chain.deadline,
-                student_id=chain.student_id)
-            warnings += 1
-        elif pct >= 50:
-            publish_sla_warning(
-                chain.workflow_id,
-                active.assignee_id,
-                "50%",
-                chain.deadline,
-                student_id=chain.student_id)
-            warnings += 1
+        publish_sla_warning(chain.workflow_id, percentage=100)
+        warnings += 1
+        if warnings % ESCALATION_INTERVAL == 0:
+            publish_escalation(chain.workflow_id)
     return {"warnings": warnings}

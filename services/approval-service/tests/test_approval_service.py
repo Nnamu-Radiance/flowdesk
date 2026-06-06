@@ -94,3 +94,82 @@ def test_approval_record_creation(api_client):
         response = api_client.post(f"/api/approvals/{chain.id}/approve/", {"comments": "Good"})
     assert response.status_code == 200
     assert ApprovalRecord.objects.filter(workflow_id=chain.workflow_id, approver_id=1, action="approve").exists()
+
+
+@pytest.mark.django_db
+def test_history_endpoint(api_client):
+    ApprovalChain.objects.create(workflow_id=110, name="Chain")
+    response = api_client.get("/api/approvals/110/history/")
+    assert response.status_code == 200
+    assert response.data == []
+
+
+@pytest.mark.django_db
+def test_history_endpoint_non_privileged():
+    from apps.approvals.service_user import ServiceUser
+    client = APIClient()
+    student = ServiceUser(user_id=999, role="student")
+    client.force_authenticate(user=student)
+
+    chain = ApprovalChain.objects.create(workflow_id=111, student_id=999)
+    response = client.get("/api/approvals/111/history/")
+    assert response.status_code == 200
+
+    other_chain = ApprovalChain.objects.create(workflow_id=112, student_id=888)
+    response = client.get("/api/approvals/112/history/")
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_legacy_history_endpoint(api_client):
+    chain = ApprovalChain.objects.create(workflow_id=113, name="Chain")
+    response = api_client.get(f"/api/approvals/chains/{chain.id}/history/")
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_decision_view_not_found(api_client):
+    response = api_client.post("/api/approvals/9999/decide/", {"action": "approve", "comments": "ok"})
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_decision_view_invalid_action(api_client):
+    ApprovalChain.objects.create(workflow_id=200)
+    response = api_client.post("/api/approvals/200/decide/", {"action": "invalid"})
+    assert response.status_code == 400
+
+
+@pytest.mark.django_db
+def test_approval_decision_by_workflow_id(api_client):
+    chain = ApprovalChain.objects.create(workflow_id=201, name="Chain")
+    ApprovalStep.objects.create(chain=chain, order=1, approver_id=1, status="pending")
+
+    with patch("apps.approvals.services.ApprovalService.decision") as mock_decision:
+        mock_decision.return_value = "approved"
+        response = api_client.post("/api/approvals/201/decide/", {"action": "approve", "comments": "OK"})
+    assert response.status_code == 200
+    assert response.data["status"] == "approved"
+
+
+@pytest.mark.django_db
+def test_legacy_approve_route(api_client):
+    chain = ApprovalChain.objects.create(workflow_id=202, name="Chain")
+    ApprovalStep.objects.create(chain=chain, order=1, approver_id=1, status="pending")
+
+    with patch("apps.approvals.services.ApprovalService.decision") as mock_decision:
+        mock_decision.return_value = "approved"
+        response = api_client.post(f"/api/approvals/chains/{chain.id}/approve/")
+    assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_reassign_not_found(api_client):
+    response = api_client.post("/api/approvals/9999/reassign/", {"assignee_id": 5})
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_chain_approve_not_found(api_client):
+    response = api_client.post("/api/approvals/9999/approve/", {"comments": "ok"})
+    assert response.status_code == 404
