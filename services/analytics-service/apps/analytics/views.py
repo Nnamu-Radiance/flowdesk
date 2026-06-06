@@ -1,5 +1,5 @@
 from django.core.cache import cache
-from django.db import connection
+from django.db import OperationalError, connection
 from rest_framework import permissions, response, status, views
 from rest_framework.decorators import api_view, permission_classes
 
@@ -20,16 +20,22 @@ def dictfetchall(cursor):
 
 
 def scalar(sql: str, params=None):
-    with connection.cursor() as cursor:
-        cursor.execute(sql, params or [])
-        row = cursor.fetchone()
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params or [])
+            row = cursor.fetchone()
+    except OperationalError:
+        return 0
     return row[0] if row else 0
 
 
 def rows(sql: str, params=None):
-    with connection.cursor() as cursor:
-        cursor.execute(sql, params or [])
-        return dictfetchall(cursor)
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params or [])
+            return dictfetchall(cursor)
+    except OperationalError:
+        return []
 
 
 class DashboardView(views.APIView):
