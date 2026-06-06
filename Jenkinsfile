@@ -137,7 +137,7 @@ pipeline {
           import_image_archive() {
             archive="$1"
             if command -v k3s >/dev/null 2>&1; then
-              k3s ctr images import "$archive"
+              k3s ctr -n k8s.io images import "$archive"
             elif command -v ctr >/dev/null 2>&1; then
               ctr -n k8s.io images import "$archive"
             elif command -v nerdctl >/dev/null 2>&1; then
