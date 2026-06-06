@@ -10,18 +10,20 @@ data:
     events { worker_connections 1024; }
 
     http {
-      upstream auth_service { server auth-service:8001; }
-      upstream workflow_service { server workflow-service:8002; }
-      upstream approval_service { server approval-service:8003; }
-      upstream notification_ws { server notification-service:8004; }
-      upstream analytics_service { server analytics-service:8005; }
+      resolver kube-dns.kube-system.svc.cluster.local valid=10s ipv6=off;
 
       server {
         listen 80;
         server_name _;
 
+        set $auth_service http://auth-service.flowdesk.svc.cluster.local:8001;
+        set $workflow_service http://workflow-service.flowdesk.svc.cluster.local:8002;
+        set $approval_service http://approval-service.flowdesk.svc.cluster.local:8003;
+        set $notification_ws http://notification-service.flowdesk.svc.cluster.local:8004;
+        set $analytics_service http://analytics-service.flowdesk.svc.cluster.local:8005;
+
         location /api/auth/ {
-          proxy_pass http://auth_service;
+          proxy_pass $auth_service;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -29,7 +31,7 @@ data:
         }
 
         location /health/auth/ {
-          proxy_pass http://auth_service/health/;
+          proxy_pass $auth_service/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -37,7 +39,7 @@ data:
         }
 
         location /api/workflows/ {
-          proxy_pass http://workflow_service;
+          proxy_pass $workflow_service;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -45,7 +47,7 @@ data:
         }
 
         location /health/workflow/ {
-          proxy_pass http://workflow_service/health/;
+          proxy_pass $workflow_service/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -53,7 +55,7 @@ data:
         }
 
         location /api/approvals/ {
-          proxy_pass http://approval_service;
+          proxy_pass $approval_service;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -61,7 +63,7 @@ data:
         }
 
         location /health/approval/ {
-          proxy_pass http://approval_service/health/;
+          proxy_pass $approval_service/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -69,7 +71,7 @@ data:
         }
 
         location /api/analytics/ {
-          proxy_pass http://analytics_service;
+          proxy_pass $analytics_service;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -77,7 +79,7 @@ data:
         }
 
         location /health/analytics/ {
-          proxy_pass http://analytics_service/health/;
+          proxy_pass $analytics_service/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -85,7 +87,7 @@ data:
         }
 
         location /health/notification/ {
-          proxy_pass http://notification_ws/health/;
+          proxy_pass $notification_ws/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -93,7 +95,7 @@ data:
         }
 
         location /ws/ {
-          proxy_pass http://notification_ws;
+          proxy_pass $notification_ws;
           proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";

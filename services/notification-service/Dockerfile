@@ -1,9 +1,10 @@
 FROM python:3.12-slim
 
 WORKDIR /app
-COPY requirements.txt .
+COPY services/notification-service/requirements.txt .
 RUN pip install --no-cache-dir --retries 5 --timeout 120 -r requirements.txt
-COPY . .
+COPY services/notification-service/ .
+COPY shared/ ./shared/
 RUN adduser --disabled-password --gecos '' appuser
 USER appuser
 EXPOSE 8004

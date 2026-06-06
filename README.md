@@ -127,8 +127,8 @@ kubectl apply -k k8s/
 ```
 
 ## Monitoring
-- Prometheus: `http://localhost:9091`
-- Grafana: `http://localhost:3000`
+- Prometheus: `http://localhost:19091`
+- Grafana: `http://localhost:13000`
 
 Dashboards and datasource provisioning are in `monitoring/grafana/`.
 
