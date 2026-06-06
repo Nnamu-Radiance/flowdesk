@@ -104,7 +104,9 @@ pipeline {
               -o /usr/local/bin/docker-compose
             chmod +x /usr/local/bin/docker-compose
           fi
-          docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --remove-orphans
+          docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build \
+            web auth-service workflow-service approval-service notification-service analytics-service \
+            celery-workflow celery-approval celery-notification celery-beat
         '''
       }
     }
