@@ -165,6 +165,23 @@ pipeline {
       steps {
         sh '''
           set -e
+          echo "---- Kubernetes preflight ----"
+          if [ -n "${KUBECONFIG:-}" ]; then
+            echo "KUBECONFIG=${KUBECONFIG}"
+            if [ ! -r "${KUBECONFIG}" ]; then
+              echo "KUBECONFIG points to a file Jenkins cannot read. For bundled k3s deploys, mount /etc/rancher/k3s into the Jenkins container."
+              exit 1
+            fi
+          else
+            echo "KUBECONFIG is not set; kubectl will use its default config search path."
+          fi
+          kubectl version --client=true
+          if ! kubectl get nodes -o wide; then
+            echo "Jenkins cannot reach the Kubernetes API. For bundled same-server k3s deploys, recreate Jenkins with the /etc/rancher/k3s mount and KUBECONFIG=/etc/rancher/k3s/k3s.yaml."
+            exit 1
+          fi
+          echo "---- End Kubernetes preflight ----"
+
           dump_k8s_diagnostics() {
             echo "---- Kubernetes diagnostics ----"
             kubectl -n flowdesk get pods -o wide || true

@@ -32,7 +32,7 @@ Your Jenkins execution environment must include:
 3. `kubectl`
 4. `git`
 
-Note: current `Dockerfile.jenkins` installs Docker CLI but not `kubectl`. Add it before production rollout.
+The bundled `Dockerfile.jenkins` provides `kubectl` through the mounted k3s binary. If you use a different Jenkins agent image, install `kubectl` or provide an equivalent wrapper.
 
 ## 3. Jenkins credentials required
 
@@ -72,6 +72,42 @@ Current image naming format:
 For same-server deployment without Docker Hub, Jenkins still builds these image names locally, then imports them into the Kubernetes runtime before deployment. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`. If pods enter `ImagePullBackOff`, the import step did not run successfully; either fix runtime image import access or enable `PUSH_TO_REGISTRY=true`.
 
 When the k3s containerd socket is mounted as `root:root` with mode `660`, the Jenkins job user must be in group `0` or the import command fails with `permission denied`.
+
+If rebuilding the Jenkins image fails because the server cannot resolve package repositories such as `deb.debian.org`, you can still apply the permission fix to the existing Jenkins image:
+
+```bash
+cd /var/www/flowdesk
+docker compose up -d --no-build --force-recreate --no-deps jenkins
+docker exec -u root flowdesk-jenkins usermod -aG root jenkins
+docker restart flowdesk-jenkins
+docker exec -u jenkins flowdesk-jenkins id
+```
+
+The final `id` output must include `0(root)` before rerunning the pipeline with `PUSH_TO_REGISTRY=false`.
+
+If there is no existing Jenkins image and Docker reports `No such image: flowdesk-jenkins:latest`, rebuild it after confirming the Compose file includes `build.network: host` for the Jenkins service:
+
+```bash
+cd /var/www/flowdesk
+docker compose build --no-cache jenkins
+docker compose up -d --force-recreate --no-deps jenkins
+docker exec -u jenkins flowdesk-jenkins id
+```
+
+The bundled Flowdesk Jenkins service uses host networking and runs Jenkins on port `8081` by default so it does not conflict with another Jenkins instance on port `8080`.
+
+```bash
+cd /var/www/flowdesk
+docker compose up -d --force-recreate --no-deps jenkins
+docker exec -u jenkins flowdesk-jenkins id
+```
+
+If the Jenkins setup wizard says the instance is offline, Jenkins cannot reach the update center from inside the container. The bundled Compose service sets public DNS resolvers for Jenkins. After updating Compose, recreate Jenkins:
+
+```bash
+cd /var/www/flowdesk
+docker compose up -d --force-recreate --no-deps jenkins
+```
 
 If the push fails with `insufficient_scope: authorization failed`, verify:
 
@@ -114,6 +150,13 @@ For option 2:
 
 1. Store kubeconfig as Jenkins secret file
 2. Expose it in pipeline stage and set `KUBECONFIG` before `kubectl apply`
+
+For bundled same-server k3s deployments, the included Compose service mounts `/etc/rancher/k3s` and sets `KUBECONFIG=/etc/rancher/k3s/k3s.yaml`. Recreate Jenkins after pulling Compose changes:
+
+```bash
+docker compose up -d --build --force-recreate --no-deps jenkins
+docker exec flowdesk-jenkins kubectl get nodes -o wide
+```
 
 ## 9. Production smoke tests
 
