@@ -16,6 +16,7 @@ spec:
       containers:
         - name: celery-workflow
           image: docker.io/flowdesk/workflow-service:latest
+          imagePullPolicy: IfNotPresent
           command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "workflow"]
           envFrom:
             - configMapRef:
@@ -24,6 +25,7 @@ spec:
                 name: flowdesk-secrets
         - name: celery-approval
           image: docker.io/flowdesk/approval-service:latest
+          imagePullPolicy: IfNotPresent
           command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "approval"]
           envFrom:
             - configMapRef:
@@ -32,6 +34,7 @@ spec:
                 name: flowdesk-secrets
         - name: celery-notification
           image: docker.io/flowdesk/notification-service:latest
+          imagePullPolicy: IfNotPresent
           command: ["celery", "-A", "config", "worker", "-l", "info", "-Q", "notification"]
           envFrom:
             - configMapRef:
