@@ -2,6 +2,26 @@ pipeline {
   agent any
 
   parameters {
+    booleanParam(
+      name: 'LOCAL_ONLY',
+      defaultValue: true,
+      description: 'Run local CI only. When true, skip Docker image push, Kubernetes deploy, and smoke tests.'
+    )
+    string(
+      name: 'REGISTRY',
+      defaultValue: 'docker.io',
+      description: 'Container registry host used for built images.'
+    )
+    string(
+      name: 'IMAGE_NAMESPACE',
+      defaultValue: 'flowdesk',
+      description: 'Registry namespace or Docker Hub username/organization that Jenkins can push to.'
+    )
+    string(
+      name: 'DOCKER_CREDENTIALS_ID',
+      defaultValue: 'DOCKER_CREDENTIALS',
+      description: 'Jenkins Username/Password credential id for registry pushes.'
+    )
     string(
       name: 'SMOKE_BASE_URL',
       defaultValue: 'http://localhost',
@@ -22,8 +42,8 @@ pipeline {
 
   environment {
     SERVICES = 'auth-service workflow-service approval-service notification-service analytics-service'
-    REGISTRY = 'docker.io'
-    IMAGE_NAMESPACE = 'flowdesk'
+    REGISTRY = "${params.REGISTRY}"
+    IMAGE_NAMESPACE = "${params.IMAGE_NAMESPACE}"
     IMAGE_TAG = "${BUILD_NUMBER}"
   }
 
@@ -66,6 +86,9 @@ pipeline {
 }
 
     stage('Build Docker Images') {
+      when {
+        expression { return !params.LOCAL_ONLY }
+      }
       steps {
         sh '''
           set -e
@@ -78,21 +101,27 @@ pipeline {
     }
 
     stage('Push to Registry') {
+      when {
+        expression { return !params.LOCAL_ONLY }
+      }
       steps {
-        sh '''
-          set -e
-          if [ -n "${DOCKER_CREDENTIALS_USR:-}" ]; then
-            echo "${DOCKER_CREDENTIALS_PSW}" | docker login -u "${DOCKER_CREDENTIALS_USR}" --password-stdin
-          fi
-          for svc in $SERVICES; do
-            docker push ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG}
-            docker push ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:latest
-          done
-        '''
+        withCredentials([usernamePassword(credentialsId: params.DOCKER_CREDENTIALS_ID, usernameVariable: 'DOCKER_USERNAME', passwordVariable: 'DOCKER_PASSWORD')]) {
+          sh '''
+            set -e
+            echo "${DOCKER_PASSWORD}" | docker login "${REGISTRY}" -u "${DOCKER_USERNAME}" --password-stdin
+            for svc in $SERVICES; do
+              docker push ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG}
+              docker push ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:latest
+            done
+          '''
+        }
       }
     }
 
     stage('Deploy to Kubernetes') {
+      when {
+        expression { return !params.LOCAL_ONLY }
+      }
       steps {
         sh '''
           kubectl apply -f k8s/namespace.yaml
@@ -134,6 +163,9 @@ pipeline {
     }
 
     stage('Smoke Tests') {
+      when {
+        expression { return !params.LOCAL_ONLY }
+      }
       steps {
         sh '''
           set -e

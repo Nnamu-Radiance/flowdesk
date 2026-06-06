@@ -36,9 +36,11 @@ Note: current `Dockerfile.jenkins` installs Docker CLI but not `kubectl`. Add it
 
 Create these in Jenkins Credentials:
 
-1. Registry credential (Username/Password), example id: `DOCKER_CREDENTIALS`
+1. Registry credential (Username/Password), default id: `DOCKER_CREDENTIALS`
 2. Kubernetes access credential (preferred: Secret File with kubeconfig)
 3. Git credential (only if repository is private)
+
+For Docker Hub, the username in `DOCKER_CREDENTIALS` must be able to push to the configured `IMAGE_NAMESPACE`. If your Docker Hub username is `my-user`, use `IMAGE_NAMESPACE=my-user`; use `flowdesk` only when the credential has access to the `flowdesk` Docker Hub organization.
 
 ## 4. Pipeline parameter for production
 
@@ -52,14 +54,22 @@ This enables build/push/deploy/smoke stages.
 
 Confirm these `Jenkinsfile` environment values are correct for production:
 
-1. `REGISTRY` (currently `docker.io`)
-2. `IMAGE_NAMESPACE` (currently `flowdesk`)
-3. `IMAGE_TAG` (`${BUILD_NUMBER}`)
+1. `REGISTRY` parameter (default `docker.io`)
+2. `IMAGE_NAMESPACE` parameter (default `flowdesk`; set this to your Docker Hub username or organization)
+3. `DOCKER_CREDENTIALS_ID` parameter (default `DOCKER_CREDENTIALS`)
+4. `IMAGE_TAG` (`${BUILD_NUMBER}`)
 
 Current image naming format:
 
 1. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:${IMAGE_TAG}`
 2. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:latest`
+
+If the push fails with `insufficient_scope: authorization failed`, verify:
+
+1. Jenkins has a Username/Password credential with the id from `DOCKER_CREDENTIALS_ID`
+2. The credential uses a valid registry password or access token
+3. `IMAGE_NAMESPACE` is a namespace that credential can push to
+4. The target repository exists or the registry account is allowed to create it
 
 ## 6. Kubernetes configuration checklist
 
@@ -128,4 +138,3 @@ Recommended:
 3. Kube access configured and tested (`kubectl get ns`)
 4. `k8s/secret.yaml` and ingress hostnames updated
 5. First full pipeline run ends `SUCCESS`
-
