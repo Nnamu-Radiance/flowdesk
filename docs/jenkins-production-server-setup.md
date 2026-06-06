@@ -69,7 +69,7 @@ Current image naming format:
 1. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:${IMAGE_TAG}`
 2. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:latest`
 
-For same-server deployment without Docker Hub, Jenkins still builds these image names locally and Kubernetes uses them with `imagePullPolicy: IfNotPresent`. This works when the Kubernetes node runtime can access the same local images. If pods enter `ImagePullBackOff`, your Kubernetes runtime cannot see Jenkins' local Docker images; either enable `PUSH_TO_REGISTRY=true` or load the images into the cluster runtime.
+For same-server deployment without Docker Hub, Jenkins still builds these image names locally, then imports them into the Kubernetes runtime before deployment. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`. If pods enter `ImagePullBackOff`, the import step did not run successfully; either fix runtime image import access or enable `PUSH_TO_REGISTRY=true`.
 
 If the push fails with `insufficient_scope: authorization failed`, verify:
 
