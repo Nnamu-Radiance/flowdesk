@@ -41,14 +41,21 @@ def test_handle_event_task_creates_notification_and_dispatches():
     assert result["handled"] == "workflow.created"
     assert result["recipients"] == [42]
     assert saved.type == "workflow.created"
-    assert saved.title == "Workflow Created"
+    assert saved.title == "Workflow Received"
+    assert saved.message == "Your request has been received and is now in the approval process."
     assert saved.read is False
     mock_layer.assert_called_once()
-    layer.group_send.assert_awaited_once_with(
-        "user_42",
-        {"type": "event_message", "type_key": "workflow.created", "payload": {"submitter_id": 42, "workflow_id": 1}},
-    )
-    mock_email.assert_called_once_with(42, template="workflow.created", context={"submitter_id": 42, "workflow_id": 1})
+    layer.group_send.assert_awaited_once()
+    group_name, message = layer.group_send.await_args.args
+    assert group_name == "user_42"
+    assert message["type"] == "notification.message"
+    assert message["type_key"] == "workflow.created"
+    assert message["payload"]["submitter_id"] == 42
+    assert message["payload"]["workflow_id"] == 1
+    assert message["payload"]["message"] == saved.message
+    assert message["payload"]["notification_id"] == saved.id
+    assert message["payload"]["timestamp"]
+    mock_email.assert_called_once_with(42, template="workflow_received", context={"submitter_id": 42, "workflow_id": 1})
 
 
 @pytest.mark.django_db
