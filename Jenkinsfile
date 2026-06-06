@@ -129,6 +129,19 @@ pipeline {
       }
       steps {
         sh '''
+          set -e
+          dump_k8s_diagnostics() {
+            echo "---- Kubernetes diagnostics ----"
+            kubectl -n flowdesk get pods -o wide || true
+            kubectl -n flowdesk get pvc || true
+            kubectl -n flowdesk get events --sort-by=.lastTimestamp || true
+            kubectl -n flowdesk describe statefulset/postgres || true
+            kubectl -n flowdesk describe pod -l app=postgres || true
+            kubectl -n flowdesk logs statefulset/postgres --tail=120 || true
+            echo "---- End Kubernetes diagnostics ----"
+          }
+          trap dump_k8s_diagnostics ERR
+
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/configmap.yaml
           kubectl apply -f k8s/secret.yaml
