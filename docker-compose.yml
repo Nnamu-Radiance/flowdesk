@@ -379,6 +379,7 @@ services:
       dockerfile: Dockerfile.jenkins
     container_name: flowdesk-jenkins
     user: root
+    privileged: true
     security_opt:
       - no-new-privileges:false
     ports:
