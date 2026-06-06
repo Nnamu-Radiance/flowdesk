@@ -93,10 +93,7 @@ pipeline {
       steps {
         sh '''
           set -e
-          docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.ci.yml \
-            up -d --build --remove-orphans
+          docker-compose -f docker-compose.yml -f docker-compose.ci.yml up -d --build --remove-orphans
         '''
       }
     }
@@ -116,7 +113,7 @@ pipeline {
           until curl -fsS "${base_url}/" > /dev/null 2>&1; do
             if [ "$elapsed" -ge "$max_wait" ]; then
               echo "Timeout: nginx did not respond within ${max_wait}s"
-              docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=40
+              docker-compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=40
               exit 1
             fi
             sleep 5
@@ -139,9 +136,9 @@ pipeline {
     failure {
       sh '''
         echo "=== Container status ==="
-        docker compose -f docker-compose.yml -f docker-compose.ci.yml ps || true
+        docker-compose -f docker-compose.yml -f docker-compose.ci.yml ps || true
         echo "=== Recent logs ==="
-        docker compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=60 || true
+        docker-compose -f docker-compose.yml -f docker-compose.ci.yml logs --tail=60 || true
       '''
     }
     always {
