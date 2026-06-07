@@ -23,3 +23,11 @@ spec:
                 name: flowdesk-config
             - secretRef:
                 name: flowdesk-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: DATABASE_URL_APPROVAL
+            - name: DJANGO_SETTINGS_MODULE
+              value: config.settings.production
