@@ -9,35 +9,175 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/base.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
+  <style>
+    body { margin: 0; font-family: 'DM Sans', Arial, sans-serif; background: #fff; color: #111827; }
+
+    .login-layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+    }
+
+    .brand-panel {
+      background: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 40px;
+      color: #fff;
+    }
+
+    .brand-content { width: 100%; max-width: 320px; }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 36px;
+    }
+
+    .brand-icon {
+      width: 38px; height: 38px;
+      border-radius: 10px;
+      background: #1e40af;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .brand-title { font-size: 17px; font-weight: 600; line-height: 1.2; }
+    .brand-subtitle { font-size: 11px; color: rgba(255,255,255,.45); margin-top: 2px; }
+
+    .brand-features { display: grid; gap: 12px; }
+    .brand-feature { display: flex; align-items: center; gap: 10px; font-size: 13px; color: rgba(255,255,255,.8); }
+    .brand-feature i { color: #22c55e; font-size: 15px; flex-shrink: 0; }
+
+    .login-panel {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 40px;
+    }
+
+    .login-form {
+      width: 100%;
+      max-width: 400px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .login-heading { margin: 0 0 4px; font-size: 20px; font-weight: 600; }
+    .login-sub { margin: 0; color: #64748b; font-size: 13px; }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #94a3b8;
+      font-size: 11px;
+    }
+    .divider::before, .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #e5e7eb;
+    }
+
+    .btn-google {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 40px;
+      padding: 10px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      color: #111827;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-google:hover { background: #f9fafb; }
+
+    .btn-magic {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 40px;
+      padding: 10px 14px;
+      border: 1px solid #86efac;
+      border-radius: 8px;
+      background: #f0fdf4;
+      color: #15803d;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn-magic:hover { background: #dcfce7; }
+
+    #login-message { min-height: 16px; font-size: 12px; color: #15803d; }
+
+    /* ── Mobile & tablet ─────────────────────────── */
+    @media (max-width: 900px) {
+      .login-layout { grid-template-columns: 1fr; }
+
+      .brand-panel {
+        padding: 28px 24px;
+        min-height: auto;
+        align-items: flex-start;
+      }
+
+      .brand-content { max-width: 100%; }
+      .brand-logo { margin-bottom: 0; }
+      .brand-features { display: none; }
+
+      .login-panel { padding: 32px 24px; align-items: flex-start; }
+      .login-form { max-width: 100%; }
+    }
+
+    @media (max-width: 480px) {
+      .brand-panel { padding: 20px 16px; }
+      .login-panel { padding: 24px 16px; }
+    }
+  </style>
 </head>
-<body style="margin:0;font-family:'DM Sans',Arial,sans-serif;background:#fff;color:#111827">
-  <main style="min-height:100vh;display:grid;grid-template-columns:minmax(0,1fr) 1200px">
-    <section style="background:#0f172a;display:flex;align-items:center;justify-content:center;padding:32px;color:#fff">
-      <div style="width:280px">
-        <div style="display:flex;align-items:center;gap:9px">
-          <div style="width:36px;height:36px;border-radius:9px;background:#1e40af;display:grid;place-items:center;font-weight:600">F</div>
+<body>
+  <main class="login-layout">
+
+    <section class="brand-panel">
+      <div class="brand-content">
+        <div class="brand-logo">
+          <div class="brand-icon">F</div>
           <div>
-            <div style="font-size:17px;font-weight:500">FlowDesk</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.4)">University document workflow automation</div>
+            <div class="brand-title">FlowDesk</div>
+            <div class="brand-subtitle">University document workflow automation</div>
           </div>
         </div>
-        <div style="display:grid;gap:10px;margin-top:34px;font-size:12px;color:rgba(255,255,255,.78)">
-          <div><i class="ti ti-check" style="color:#22c55e" aria-hidden="true"></i> Project submission &amp; defense clearance</div>
-          <div><i class="ti ti-check" style="color:#22c55e" aria-hidden="true"></i> Financial &amp; academic clearance</div>
-          <div><i class="ti ti-check" style="color:#22c55e" aria-hidden="true"></i> Internship placement &amp; evaluation</div>
-          <div><i class="ti ti-check" style="color:#22c55e" aria-hidden="true"></i> Post-defense submission routing</div>
+        <div class="brand-features">
+          <div class="brand-feature"><i class="ti ti-check" aria-hidden="true"></i> Project submission &amp; defense clearance</div>
+          <div class="brand-feature"><i class="ti ti-check" aria-hidden="true"></i> Financial &amp; academic clearance</div>
+          <div class="brand-feature"><i class="ti ti-check" aria-hidden="true"></i> Internship placement &amp; evaluation</div>
+          <div class="brand-feature"><i class="ti ti-check" aria-hidden="true"></i> Post-defense submission routing</div>
         </div>
       </div>
     </section>
 
-    <section style="padding:32px;display:flex;align-items:center;justify-content:center">
-      <form id="login-form" style="width:50%;display:grid;gap:14px">
+    <section class="login-panel">
+      <form id="login-form" class="login-form">
         <div>
-          <h1 style="margin:0 0 4px;font-size:15px;font-weight:500">Sign in</h1>
-          <p style="margin:0;color:#64748b;font-size:11px">Choose your authentication method</p>
+          <h1 class="login-heading">Sign in</h1>
+          <p class="login-sub">Choose your authentication method</p>
         </div>
 
-        <button id="google-login" type="button" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:36px;padding:9px 12px;border:.5px solid #d1d5db;border-radius:6px;background:#fff;color:#111827;font-size:12px;cursor:pointer">
+        <button id="google-login" class="btn-google" type="button">
           <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
             <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.91c1.7-1.57 2.69-3.88 2.69-6.62z"/>
             <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.91-2.26c-.81.54-1.84.86-3.05.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.33A9 9 0 0 0 9 18z"/>
@@ -47,123 +187,127 @@
           Continue with Google
         </button>
 
-        <div style="display:flex;align-items:center;gap:10px;color:#94a3b8;font-size:10px"><span style="height:1px;background:#e5e7eb;flex:1"></span>or<span style="height:1px;background:#e5e7eb;flex:1"></span></div>
+        <div class="divider">or</div>
 
         <div class="form-group" style="margin:0">
-          <label class="form-label" for="email" style="font-size:11px">Email</label>
+          <label class="form-label" for="email">Email</label>
           <input id="email" class="form-input" type="email" placeholder="name@university.cm" autocomplete="email" required>
         </div>
-        <button id="magic-login" type="button" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;min-height:36px;padding:9px 12px;border:1px solid #86efac;border-radius:6px;background:#f0fdf4;color:#15803d;font-size:12px;cursor:pointer">
+
+        <button id="magic-login" class="btn-magic" type="button">
           <i class="ti ti-send" aria-hidden="true"></i> Send magic link
         </button>
-        <div id="login-message" style="min-height:14px;font-size:11px;color:#15803d"></div>
+        <div id="login-message"></div>
 
-        <div style="display:flex;align-items:center;gap:10px;color:#94a3b8;font-size:10px"><span style="height:1px;background:#e5e7eb;flex:1"></span>or password<span style="height:1px;background:#e5e7eb;flex:1"></span></div>
+        <div class="divider">or password</div>
 
         <div class="form-group" style="margin:0">
-          <label class="form-label" for="password" style="font-size:11px">Password</label>
+          <label class="form-label" for="password">Password</label>
           <input id="password" class="form-input" type="password" autocomplete="current-password">
         </div>
         <button id="password-login" class="btn btn-primary w-full" type="submit">Sign in</button>
-        <p style="margin:0;color:#64748b;font-size:10px">Magic link sends a one-click login URL - no password needed</p>
+        <p style="margin:0;color:#64748b;font-size:11px">Magic link sends a one-click login URL — no password needed</p>
       </form>
     </section>
+
   </main>
 
   <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
   <script src="/static/js/auth.js"></script>
-<script src="/static/js/api.js"></script>
-<script src="/static/js/utils.js"></script>
-<script>
-  const ROLE_REDIRECT = {
-    admin:    '/static/pages/dashboard.html',
-    approver: '/static/pages/approvals.html',
-    submitter:'/static/pages/dashboard.html',
-  };
+  <script src="/static/js/api.js"></script>
+  <script src="/static/js/utils.js"></script>
+  <script>
+    const ROLE_REDIRECT = {
+      admin:    '/static/pages/dashboard.html',
+      approver: '/static/pages/approvals.html',
+      submitter:'/static/pages/dashboard.html',
+    };
 
-  function redirectByRole(user) {
-    const role = user?.role || AuthManager.getUserRole() || 'submitter';
-    window.location.href = ROLE_REDIRECT[role] || '/static/pages/dashboard.html';
-  }
-
-  function setMessage(text, isError = false) {
-    const message = document.getElementById('login-message');
-    message.textContent = text;
-    message.style.color = isError ? '#dc2626' : '#15803d';
-  }
-
-  async function consumeTokens() {
-    const hash = new URLSearchParams(window.location.hash.slice(1));
-    const query = new URLSearchParams(window.location.search);
-    const access = hash.get('access') || query.get('access');
-    const refresh = hash.get('refresh') || query.get('refresh');
-    if (access) {
-      AuthManager.setTokens({ access, refresh });
-      window.history.replaceState({}, document.title, window.location.pathname);
-      try {
-        const user = await api.get('/api/auth/me/');
-        AuthManager.setTokens({ access, refresh, user });
-        redirectByRole(user);
-      } catch (_) {
-        redirectByRole(null);
-      }
-      return true;
+    function redirectByRole(user) {
+      const role = user?.role || AuthManager.getUserRole() || 'submitter';
+      window.location.href = ROLE_REDIRECT[role] || '/static/pages/dashboard.html';
     }
-    const magicToken = query.get('token');
-    if (magicToken) {
-      try {
-        const data = await api.get(`/api/auth/magic-link/verify/?token=${encodeURIComponent(magicToken)}`);
-        AuthManager.setTokens(data);
+
+    function setMessage(text, isError = false) {
+      const message = document.getElementById('login-message');
+      message.textContent = text;
+      message.style.color = isError ? '#dc2626' : '#15803d';
+    }
+
+    async function consumeTokens() {
+      const hash = new URLSearchParams(window.location.hash.slice(1));
+      const query = new URLSearchParams(window.location.search);
+      const access = hash.get('access') || query.get('access');
+      const refresh = hash.get('refresh') || query.get('refresh');
+      if (access) {
+        AuthManager.setTokens({ access, refresh });
         window.history.replaceState({}, document.title, window.location.pathname);
-        redirectByRole(data.user);
-      } catch (_) {
-        setMessage('Magic link expired or invalid. Please request a new one.', true);
+        try {
+          const user = await api.get('/api/auth/me/');
+          AuthManager.setTokens({ access, refresh, user });
+          redirectByRole(user);
+        } catch (_) {
+          redirectByRole(null);
+        }
+        return true;
       }
-      return true;
+      const magicToken = query.get('token');
+      if (magicToken) {
+        try {
+          const data = await api.get(`/api/auth/magic-link/verify/?token=${encodeURIComponent(magicToken)}`);
+          AuthManager.setTokens(data);
+          window.history.replaceState({}, document.title, window.location.pathname);
+          redirectByRole(data.user);
+        } catch (_) {
+          setMessage('Magic link expired or invalid. Please request a new one.', true);
+        }
+        return true;
+      }
+      return false;
     }
-    return false;
-  }
 
-  document.addEventListener('DOMContentLoaded', async () => {
-    if (await consumeTokens()) return;
-    if (AuthManager.isLoggedIn()) {
-      try {
-        const user = await api.get('/api/auth/me/');
-        AuthManager.setTokens({ access: AuthManager.getAccessToken(), refresh: AuthManager.getRefreshToken(), user });
-        redirectByRole(user);
-      } catch (_) {
-        AuthManager.clear();
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (await consumeTokens()) return;
+      if (AuthManager.isLoggedIn()) {
+        try {
+          const user = await api.get('/api/auth/me/');
+          AuthManager.setTokens({ access: AuthManager.getAccessToken(), refresh: AuthManager.getRefreshToken(), user });
+          redirectByRole(user);
+        } catch (_) {
+          AuthManager.clear();
+        }
+        return;
       }
-      return;
-    }
 
-    document.getElementById('google-login').addEventListener('click', () => {
-      window.location.href = '/api/auth/google/';
-    });
+      document.getElementById('google-login').addEventListener('click', () => {
+        window.location.href = '/api/auth/google/';
+      });
 
-    document.getElementById('magic-login').addEventListener('click', async () => {
-      const email = document.getElementById('email').value.trim();
-      if (!email) { setMessage('Enter your email address first.', true); return; }
-      try {
-        await api.post('/api/auth/magic-link/request/', { email });
-        setMessage('Check your email — a sign-in link has been sent.');
-      } catch (err) {
-        setMessage(err.message, true);
-      }
-    });
+      document.getElementById('magic-login').addEventListener('click', async () => {
+        const email = document.getElementById('email').value.trim();
+        if (!email) { setMessage('Enter your email address first.', true); return; }
+        try {
+          await api.post('/api/auth/magic-link/request/', { email });
+          setMessage('Check your email — a sign-in link has been sent.');
+        } catch (err) {
+          setMessage(err.message, true);
+        }
+      });
 
-    document.getElementById('login-form').addEventListener('submit', async (event) => {
-      event.preventDefault();
-      const email = document.getElementById('email').value.trim();
-      const password = document.getElementById('password').value;
-      try {
-        const data = await AuthManager.login(email, password);
-        const user = data.user || await api.get('/api/auth/me/');
-        AuthManager.setTokens({ access: data.access, refresh: data.refresh, user });
-        redirectByRole(user);
-      } catch (err) {
-        setMessage(err.message || 'Invalid credentials.', true);
-      }
+      document.getElementById('login-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const email = document.getElementById('email').value.trim();
+        const password = document.getElementById('password').value;
+        try {
+          const data = await AuthManager.login(email, password);
+          const user = data.user || await api.get('/api/auth/me/');
+          AuthManager.setTokens({ access: data.access, refresh: data.refresh, user });
+          redirectByRole(user);
+        } catch (err) {
+          setMessage(err.message || 'Invalid credentials.', true);
+        }
+      });
     });
-  });
-</script>
+  </script>
+</body>
+</html>
