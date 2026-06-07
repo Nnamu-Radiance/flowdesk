@@ -146,6 +146,22 @@
       }
     }
 
+    stage('SonarQube Analysis') {
+      steps {
+        withSonarQubeEnv('sonarqube') {
+          sh "${tool 'SonarScanner'}/bin/sonar-scanner"
+        }
+      }
+    }
+
+    stage('Quality Gate') {
+      steps {
+        timeout(time: 5, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: true
+        }
+      }
+    }
+
     stage('Build Docker Images') {
       when {
         expression { return !params.LOCAL_ONLY && params.BUILD_DOCKER_IMAGES }
