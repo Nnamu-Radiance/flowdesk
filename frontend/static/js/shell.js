@@ -76,7 +76,20 @@ const FlowDeskShell = (() => {
       .btn-success{background:#15803d;color:#fff}.btn-success:hover{background:#166534;color:#fff}
       .notif-panel{position:absolute;right:16px;top:42px;width:300px;max-height:360px;overflow:auto;border:1px solid #e5e7eb;border-radius:6px;background:#fff;z-index:40}.notif-item{display:flex;gap:8px;padding:9px 10px;border-bottom:1px solid #f1f5f9;font-size:11px;cursor:pointer}.notif-item:hover{background:#f8fafc}
       .banner{padding:9px 10px;border-radius:6px;font-size:11px}.banner.success{background:#f0fdf4;color:#15803d}.banner.error{background:#fee2e2;color:#dc2626}.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-      @media(max-width:900px){.with-sidebar{padding-left:0}.sidebar{display:none}.stats-row,.form-row{grid-template-columns:1fr}.page-area{padding:12px}}
+      .mob-menu-btn{display:none;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;color:#334155;cursor:pointer;font-size:16px}
+      .sb-overlay{display:none;position:fixed;inset:0;z-index:19;background:rgba(0,0,0,.45)}
+      @media(max-width:900px){
+        .mob-menu-btn{display:flex}
+        .with-sidebar{padding-left:0}
+        .sidebar{transform:translateX(-100%);transition:transform .25s ease}
+        .sidebar.open{transform:translateX(0)}
+        .sb-overlay.open{display:block}
+        .sb-close{display:flex !important}
+        .stats-row,.form-row{grid-template-columns:1fr}
+        .page-area{padding:12px}
+        .tbl{font-size:10px}
+        .tbl th,.tbl td{padding:6px 4px}
+      }
     `;
     document.head.appendChild(style);
   }
@@ -208,7 +221,10 @@ const FlowDeskShell = (() => {
     const nav = navByRole[role] || navByRole.submitter;
     return `
       <aside class="sidebar">
-        <div class="sb-brand"><span class="sb-logo">F</span><span><span class="sb-name block">FlowDesk</span></span></div>
+        <div class="sb-brand" style="justify-content:space-between">
+          <div style="display:flex;align-items:center;gap:8px"><span class="sb-logo">F</span><span class="sb-name">FlowDesk</span></div>
+          <button class="sb-close" id="sb-close-btn" type="button" aria-label="Close menu" style="display:none;align-items:center;justify-content:center;width:26px;height:26px;border:1px solid rgba(255,255,255,.2);border-radius:5px;background:transparent;color:rgba(255,255,255,.7);cursor:pointer"><i class="ti ti-x" aria-hidden="true"></i></button>
+        </div>
         <nav class="sb-nav">
           <div class="sb-section">Workspace</div>
           ${nav.map(([key, label, href, icon]) => `
@@ -236,8 +252,10 @@ const FlowDeskShell = (() => {
     const role = roleOf(user);
     document.body.className = 'with-sidebar';
     document.body.innerHTML = `
+      <div id="sb-overlay" class="sb-overlay"></div>
       ${renderSidebar(activePage, user, options.pendingCount || 0)}
       <header class="topbar">
+        <button class="mob-menu-btn" id="mob-menu-btn" type="button" aria-label="Open menu"><i class="ti ti-menu-2" aria-hidden="true"></i></button>
         <div class="tb-title">${esc(title)}</div>
         <div class="tb-right">
           ${role === 'submitter' && !options.hideNewRequest ? '<a class="btn btn-primary btn-sm" href="/static/pages/new-request.html"><i class="ti ti-file-plus" aria-hidden="true"></i> New request</a>' : ''}
@@ -254,6 +272,15 @@ const FlowDeskShell = (() => {
       panel.classList.toggle('hidden');
       renderNotificationList();
     });
+
+    const sidebar = document.querySelector('.sidebar');
+    const sbOverlay = document.getElementById('sb-overlay');
+    const openSidebar = () => { sidebar?.classList.add('open'); sbOverlay?.classList.add('open'); };
+    const closeSidebar = () => { sidebar?.classList.remove('open'); sbOverlay?.classList.remove('open'); };
+    document.getElementById('mob-menu-btn')?.addEventListener('click', openSidebar);
+    document.getElementById('sb-close-btn')?.addEventListener('click', closeSidebar);
+    sbOverlay?.addEventListener('click', closeSidebar);
+
     renderNotificationList();
     wireLiveNotifications();
     return document.getElementById('page-root');
