@@ -303,7 +303,6 @@ pipeline {
           kubectl apply -f k8s/namespace.yaml
           kubectl apply -f k8s/network-policy.yaml
           kubectl apply -f k8s/configmap.yaml
-          kubectl apply -f k8s/secret.yaml
           kubectl apply -f k8s/postgres.yaml
           desired_postgres_image="pgvector/pgvector:pg16"
           current_postgres_image="$(kubectl -n flowdesk get pod postgres-0 -o jsonpath='{.spec.containers[?(@.name=="postgres")].image}' 2>/dev/null || true)"
