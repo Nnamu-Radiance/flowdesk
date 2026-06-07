@@ -82,6 +82,8 @@
         - prometheus-config.yaml
         - prometheus-deployment.yaml
         - grafana-config.yaml
+        - grafana-provider.yaml
+        - grafana-dashboard.yaml
         - grafana-deployment.yaml
       ignore_errors: true
 
