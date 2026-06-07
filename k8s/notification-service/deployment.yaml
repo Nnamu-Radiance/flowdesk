@@ -17,7 +17,7 @@ spec:
         - name: notification-service
           image: docker.io/flowdesk/notification-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["sh", "-c", "python manage.py migrate && daphne -b 0.0.0.0 -p 8004 config.asgi:application"]
+          command: ["sh", "-c", "python -c 'import django; django.setup(); from django.db import connection; connection.cursor().execute(\"CREATE SCHEMA IF NOT EXISTS notification_svc\")' && python manage.py migrate && daphne -b 0.0.0.0 -p 8004 config.asgi:application"]
           ports:
             - containerPort: 8004
           env:

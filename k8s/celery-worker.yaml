@@ -23,6 +23,14 @@ spec:
                 name: flowdesk-config
             - secretRef:
                 name: flowdesk-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: DATABASE_URL_WORKFLOW
+            - name: DJANGO_SETTINGS_MODULE
+              value: config.settings.production
         - name: celery-approval
           image: docker.io/flowdesk/approval-service:latest
           imagePullPolicy: IfNotPresent
@@ -32,6 +40,14 @@ spec:
                 name: flowdesk-config
             - secretRef:
                 name: flowdesk-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: DATABASE_URL_APPROVAL
+            - name: DJANGO_SETTINGS_MODULE
+              value: config.settings.production
         - name: celery-notification
           image: docker.io/flowdesk/notification-service:latest
           imagePullPolicy: IfNotPresent
@@ -41,3 +57,11 @@ spec:
                 name: flowdesk-config
             - secretRef:
                 name: flowdesk-secrets
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: DATABASE_URL_NOTIFICATION
+            - name: DJANGO_SETTINGS_MODULE
+              value: config.settings.production
