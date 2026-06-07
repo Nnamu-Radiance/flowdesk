@@ -65,6 +65,10 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '10'))
   }
 
+  triggers {
+    githubPush()
+  }
+
   environment {
     SERVICES = 'auth-service workflow-service approval-service notification-service analytics-service'
     REGISTRY = "${params.REGISTRY}"
