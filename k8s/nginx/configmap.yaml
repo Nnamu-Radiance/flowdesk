@@ -10,12 +10,20 @@ data:
     events { worker_connections 1024; }
 
     http {
+      resolver 10.43.0.10 valid=10s ipv6=off;
+
       server {
         listen 80;
         server_name _;
 
+        set $upstream_auth http://auth-service:8001;
+        set $upstream_workflow http://workflow-service:8002;
+        set $upstream_approval http://approval-service:8003;
+        set $upstream_notification http://notification-service:8004;
+        set $upstream_analytics http://analytics-service:8005;
+
         location /api/auth/ {
-          proxy_pass http://auth-service.flowdesk.svc.cluster.local:8001;
+          proxy_pass $upstream_auth;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -23,7 +31,7 @@ data:
         }
 
         location /health/auth/ {
-          proxy_pass http://auth-service.flowdesk.svc.cluster.local:8001/health/;
+          proxy_pass $upstream_auth/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -31,7 +39,7 @@ data:
         }
 
         location /api/workflows/ {
-          proxy_pass http://workflow-service.flowdesk.svc.cluster.local:8002;
+          proxy_pass $upstream_workflow;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -39,7 +47,7 @@ data:
         }
 
         location /health/workflow/ {
-          proxy_pass http://workflow-service.flowdesk.svc.cluster.local:8002/health/;
+          proxy_pass $upstream_workflow/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -47,7 +55,7 @@ data:
         }
 
         location /api/approvals/ {
-          proxy_pass http://approval-service.flowdesk.svc.cluster.local:8003;
+          proxy_pass $upstream_approval;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -55,7 +63,7 @@ data:
         }
 
         location /health/approval/ {
-          proxy_pass http://approval-service.flowdesk.svc.cluster.local:8003/health/;
+          proxy_pass $upstream_approval/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -63,7 +71,7 @@ data:
         }
 
         location /api/analytics/ {
-          proxy_pass http://analytics-service.flowdesk.svc.cluster.local:8005;
+          proxy_pass $upstream_analytics;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -71,7 +79,7 @@ data:
         }
 
         location /health/analytics/ {
-          proxy_pass http://analytics-service.flowdesk.svc.cluster.local:8005/health/;
+          proxy_pass $upstream_analytics/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -79,7 +87,7 @@ data:
         }
 
         location /health/notification/ {
-          proxy_pass http://notification-service.flowdesk.svc.cluster.local:8004/health/;
+          proxy_pass $upstream_notification/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -87,7 +95,7 @@ data:
         }
 
         location /ws/ {
-          proxy_pass http://notification-service.flowdesk.svc.cluster.local:8004;
+          proxy_pass $upstream_notification;
           proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";
