@@ -4,8 +4,8 @@ metadata:
   name: flowdesk-config
   namespace: flowdesk
 data:
-  REDIS_URL: redis://redis.flowdesk.svc.cluster.local:6379/0
-  CELERY_BROKER_URL: redis://redis.flowdesk.svc.cluster.local:6379/0
-  CELERY_RESULT_BACKEND: redis://redis.flowdesk.svc.cluster.local:6379/1
+  REDIS_URL: redis://10.43.65.173:6379/0
+  CELERY_BROKER_URL: redis://10.43.65.173:6379/0
+  CELERY_RESULT_BACKEND: redis://10.43.65.173:6379/1
   ALLOWED_HOSTS: flowdesk.local
   DEBUG: "False"
