@@ -53,13 +53,13 @@ data:
         },
         {
           "id": 4,
-          "title": "DB Query Time p95 (s)",
+          "title": "Memory Usage (MB)",
           "type": "timeseries",
           "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
           "targets": [
             {
-              "expr": "histogram_quantile(0.95, sum(rate(django_db_execute_total_bucket[5m])) by (le, vendor, alias))",
-              "legendFormat": "{{vendor}} {{alias}}"
+              "expr": "process_resident_memory_bytes / 1024 / 1024",
+              "legendFormat": "{{service}}"
             }
           ]
         },
@@ -77,13 +77,13 @@ data:
         },
         {
           "id": 6,
-          "title": "Celery Tasks / sec",
+          "title": "Responses by Status / sec",
           "type": "timeseries",
           "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
           "targets": [
             {
-              "expr": "sum(rate(celery_tasks_total[5m])) by (name, state)",
-              "legendFormat": "{{name}} {{state}}"
+              "expr": "sum(rate(django_http_responses_total_by_status_view_method_total[5m])) by (status, service)",
+              "legendFormat": "{{service}} {{status}}"
             }
           ]
         }

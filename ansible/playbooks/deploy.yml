@@ -74,18 +74,24 @@
     - name: Restart nginx to pick up new configmap
       command: kubectl -n flowdesk rollout restart deployment/nginx
 
-    - name: Apply monitoring stack
+    - name: Apply monitoring stack (except Grafana datasource)
       command: kubectl apply -f {{ app_root }}/k8s/monitoring/{{ item }}
       loop:
         - namespace.yaml
         - prometheus-rbac.yaml
         - prometheus-config.yaml
         - prometheus-deployment.yaml
-        - grafana-config.yaml
         - grafana-provider.yaml
         - grafana-dashboard.yaml
         - grafana-deployment.yaml
       ignore_errors: true
+
+    - name: Resolve Prometheus ClusterIP and apply Grafana datasource
+      shell: |
+        set -e
+        PROM_IP=$(kubectl -n monitoring get svc prometheus -o jsonpath='{.spec.clusterIP}')
+        sed -e "s/__PROMETHEUS_IP__/${PROM_IP}/g" \
+            {{ app_root }}/k8s/monitoring/grafana-config.yaml | kubectl apply -f -
 
     - name: Wait for core services to be ready
       command: kubectl -n flowdesk wait deployment/{{ item }} --for=condition=available --timeout=300s
