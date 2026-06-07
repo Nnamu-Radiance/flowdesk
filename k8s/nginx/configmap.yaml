@@ -15,7 +15,7 @@ data:
         server_name _;
 
         location /api/auth/ {
-          proxy_pass http://10.43.195.205:8001;
+          proxy_pass http://__AUTH_IP__:8001;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -23,7 +23,7 @@ data:
         }
 
         location /health/auth/ {
-          proxy_pass http://10.43.195.205:8001/health/;
+          proxy_pass http://__AUTH_IP__:8001/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -31,7 +31,7 @@ data:
         }
 
         location /api/workflows/ {
-          proxy_pass http://10.43.182.29:8002;
+          proxy_pass http://__WORKFLOW_IP__:8002;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -39,7 +39,7 @@ data:
         }
 
         location /health/workflow/ {
-          proxy_pass http://10.43.182.29:8002/health/;
+          proxy_pass http://__WORKFLOW_IP__:8002/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -47,7 +47,7 @@ data:
         }
 
         location /api/approvals/ {
-          proxy_pass http://10.43.236.241:8003;
+          proxy_pass http://__APPROVAL_IP__:8003;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -55,7 +55,7 @@ data:
         }
 
         location /health/approval/ {
-          proxy_pass http://10.43.236.241:8003/health/;
+          proxy_pass http://__APPROVAL_IP__:8003/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -63,7 +63,7 @@ data:
         }
 
         location /api/analytics/ {
-          proxy_pass http://10.43.194.102:8005;
+          proxy_pass http://__ANALYTICS_IP__:8005;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -71,7 +71,7 @@ data:
         }
 
         location /health/analytics/ {
-          proxy_pass http://10.43.194.102:8005/health/;
+          proxy_pass http://__ANALYTICS_IP__:8005/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -79,7 +79,7 @@ data:
         }
 
         location /health/notification/ {
-          proxy_pass http://10.43.51.115:8004/health/;
+          proxy_pass http://__NOTIFICATION_IP__:8004/health/;
           proxy_set_header Host $host;
           proxy_set_header X-Real-IP $remote_addr;
           proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -87,7 +87,7 @@ data:
         }
 
         location /ws/ {
-          proxy_pass http://10.43.51.115:8004;
+          proxy_pass http://__NOTIFICATION_IP__:8004;
           proxy_http_version 1.1;
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "upgrade";
@@ -96,8 +96,11 @@ data:
         }
 
         location / {
-          return 200 'FlowDesk gateway is running';
-          add_header Content-Type text/plain;
+          proxy_pass http://__FRONTEND_IP__:80;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
         }
 
         proxy_set_header X-Internal-User "";
