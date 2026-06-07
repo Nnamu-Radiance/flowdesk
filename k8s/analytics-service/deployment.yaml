@@ -17,7 +17,7 @@ spec:
         - name: analytics-service
           image: docker.io/flowdesk/analytics-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8005"]
+          command: ["sh", "-c", "python -c 'import django; django.setup(); from django.db import connection; connection.cursor().execute(\"CREATE SCHEMA IF NOT EXISTS analytics_svc\")' && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8005"]
           ports:
             - containerPort: 8005
           env:

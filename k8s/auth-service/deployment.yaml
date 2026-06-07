@@ -17,7 +17,7 @@ spec:
         - name: auth-service
           image: docker.io/flowdesk/auth-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["sh", "-c", "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8001"]
+          command: ["sh", "-c", "python -c 'import django; django.setup(); from django.db import connection; connection.cursor().execute(\"CREATE SCHEMA IF NOT EXISTS auth_svc\")' && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8001"]
           ports:
             - containerPort: 8001
           env:
