@@ -48,6 +48,23 @@ spec:
                 configMapKeyRef:
                   name: flowdesk-config
                   key: CELERY_BROKER_URL
+            - name: GOOGLE_OAUTH_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: GOOGLE_OAUTH_CLIENT_ID
+            - name: GOOGLE_OAUTH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: GOOGLE_OAUTH_CLIENT_SECRET
+            - name: GOOGLE_OAUTH_REDIRECT_URI
+              valueFrom:
+                secretKeyRef:
+                  name: flowdesk-secrets
+                  key: GOOGLE_OAUTH_REDIRECT_URI
+            - name: FRONTEND_BASE_URL
+              value: "http://3.77.183.190:30800"
           livenessProbe:
             httpGet:
               path: /health/
