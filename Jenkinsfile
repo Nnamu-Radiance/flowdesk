@@ -153,6 +153,8 @@ pipeline {
             docker build --network=host -f services/$svc/Dockerfile -t ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG} .
             docker tag ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAMESPACE}/${svc}:latest
           done
+          docker build --network=host -f frontend/Dockerfile -t ${REGISTRY}/${IMAGE_NAMESPACE}/frontend:${IMAGE_TAG} .
+          docker tag ${REGISTRY}/${IMAGE_NAMESPACE}/frontend:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAMESPACE}/frontend:latest
         '''
       }
     }
@@ -206,6 +208,10 @@ pipeline {
             import_image_archive "$archive"
             rm -f "$archive"
           done
+          archive=".k8s-images/frontend.tar"
+          docker save -o "$archive" ${REGISTRY}/${IMAGE_NAMESPACE}/frontend:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAMESPACE}/frontend:latest
+          import_image_archive "$archive"
+          rm -f "$archive"
         '''
       }
     }
@@ -313,7 +319,8 @@ pipeline {
           kubectl apply -f k8s/analytics-service/
           kubectl apply -f k8s/celery-worker.yaml
           kubectl apply -f k8s/celery-beat.yaml
-          kubectl apply -f k8s/nginx/
+          kubectl apply -f k8s/frontend/
+          kubectl apply -f k8s/nginx/deployment.yaml
           kubectl apply -f k8s/ingress.yaml
 
           if [ -n "${IMAGE_TAG:-}" ]; then
@@ -324,6 +331,7 @@ pipeline {
             kubectl -n flowdesk set image deployment/analytics-service analytics-service=${REGISTRY}/${IMAGE_NAMESPACE}/analytics-service:${IMAGE_TAG}
             kubectl -n flowdesk set image deployment/celery-worker celery-workflow=${REGISTRY}/${IMAGE_NAMESPACE}/workflow-service:${IMAGE_TAG} celery-approval=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG} celery-notification=${REGISTRY}/${IMAGE_NAMESPACE}/notification-service:${IMAGE_TAG}
             kubectl -n flowdesk set image deployment/celery-beat celery-beat=${REGISTRY}/${IMAGE_NAMESPACE}/approval-service:${IMAGE_TAG}
+            kubectl -n flowdesk set image deployment/frontend frontend=${REGISTRY}/${IMAGE_NAMESPACE}/frontend:${IMAGE_TAG}
           else
             echo "Restoring currently deployed application images after manifest apply."
             [ -n "$current_auth_image" ] && kubectl -n flowdesk set image deployment/auth-service auth-service="$current_auth_image"
@@ -336,6 +344,22 @@ pipeline {
             [ -n "$current_celery_notification_image" ] && kubectl -n flowdesk set image deployment/celery-worker celery-notification="$current_celery_notification_image"
             [ -n "$current_celery_beat_image" ] && kubectl -n flowdesk set image deployment/celery-beat celery-beat="$current_celery_beat_image"
           fi
+
+          echo "---- Resolving service ClusterIPs for nginx configmap ----"
+          AUTH_IP=$(kubectl -n flowdesk get svc auth-service -o jsonpath='{.spec.clusterIP}')
+          WORKFLOW_IP=$(kubectl -n flowdesk get svc workflow-service -o jsonpath='{.spec.clusterIP}')
+          APPROVAL_IP=$(kubectl -n flowdesk get svc approval-service -o jsonpath='{.spec.clusterIP}')
+          NOTIFICATION_IP=$(kubectl -n flowdesk get svc notification-service -o jsonpath='{.spec.clusterIP}')
+          ANALYTICS_IP=$(kubectl -n flowdesk get svc analytics-service -o jsonpath='{.spec.clusterIP}')
+          FRONTEND_IP=$(kubectl -n flowdesk get svc frontend -o jsonpath='{.spec.clusterIP}')
+          echo "auth=${AUTH_IP} workflow=${WORKFLOW_IP} approval=${APPROVAL_IP} notification=${NOTIFICATION_IP} analytics=${ANALYTICS_IP} frontend=${FRONTEND_IP}"
+          sed -e "s/__AUTH_IP__/${AUTH_IP}/g" \
+              -e "s/__WORKFLOW_IP__/${WORKFLOW_IP}/g" \
+              -e "s/__APPROVAL_IP__/${APPROVAL_IP}/g" \
+              -e "s/__NOTIFICATION_IP__/${NOTIFICATION_IP}/g" \
+              -e "s/__ANALYTICS_IP__/${ANALYTICS_IP}/g" \
+              -e "s/__FRONTEND_IP__/${FRONTEND_IP}/g" \
+              k8s/nginx/configmap.yaml | kubectl apply -f -
           kubectl -n flowdesk rollout restart deployment/nginx
 
           wait_for_rollout() {
@@ -354,6 +378,7 @@ pipeline {
           wait_for_rollout deployment/analytics-service 300s
           wait_for_rollout deployment/celery-worker 300s
           wait_for_rollout deployment/celery-beat 300s
+          wait_for_rollout deployment/frontend 120s
           wait_for_rollout deployment/nginx 180s
         '''
       }
