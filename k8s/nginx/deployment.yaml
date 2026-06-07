@@ -33,9 +33,10 @@ metadata:
   name: nginx
   namespace: flowdesk
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: nginx
   ports:
     - port: 80
       targetPort: 80
+      nodePort: 30800

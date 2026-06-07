@@ -49,7 +49,7 @@ pipeline {
     )
     string(
       name: 'SMOKE_BASE_URL',
-      defaultValue: 'http://localhost',
+      defaultValue: 'http://localhost:30800',
       description: 'Externally reachable host/base URL for deployed smoke tests, for example http://flowdesk.local or http://127.0.0.1.'
     )
     string(
