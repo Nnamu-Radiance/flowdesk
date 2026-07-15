@@ -33,7 +33,7 @@
     const APPROVER_TYPE_LABELS = Object.fromEntries(APPROVER_TYPES.map(t => [t.value, t.label]));
 
     // Types that require a faculty selection
-    const FACULTY_SCOPED_TYPES = new Set(['hod', 'admin_assistant']);
+    const FACULTY_SCOPED_TYPES = new Set(['dean', 'hod', 'admin_assistant']);
     const FACULTIES = ['ICT', 'BMS'];
 
     function approverTypeOptions(selected) {

@@ -84,7 +84,7 @@ def resolve_approver(stop_role: str, supervisor_id: int = None, department: str 
     if not approver_type:
         raise ValueError(f"Unknown approver role in CSV: '{stop_role}'")
 
-    department_scoped = {"hod", "admin_assistant"}
+    faculty_scoped = {"dean", "hod", "admin_assistant"}
 
     params = {
         "role": "approver",
@@ -92,7 +92,7 @@ def resolve_approver(stop_role: str, supervisor_id: int = None, department: str 
         "is_active": "true",
     }
 
-    if approver_type in department_scoped:
+    if approver_type in faculty_scoped:
         if faculty:
             params["faculty"] = faculty
 
