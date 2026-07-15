@@ -1,10 +1,10 @@
-pipeline {
+﻿pipeline {
   agent any
 
   parameters {
     booleanParam(
       name: 'LOCAL_ONLY',
-      defaultValue: true,
+      defaultValue: false,
       description: 'Run local CI only. When true, skip Docker image push, Kubernetes deploy, and smoke tests.'
     )
     booleanParam(
