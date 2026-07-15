@@ -331,3 +331,19 @@ def test_jwt_authentication_rejects_invalid_token():
     with patch("apps.approvals.authentication.validate_jwt", side_effect=ValueError("bad")):
         with pytest.raises(exceptions.AuthenticationFailed):
             JWTLocalAuthentication().authenticate(request)
+
+
+def test_resolve_approver_scopes_dean_by_faculty():
+    from apps.approvals.services import resolve_approver
+
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.raise_for_status.return_value = None
+        mock_get.return_value.json.return_value = [{"id": 42}]
+
+        approver_id = resolve_approver("Dean", faculty="ICT", department="Computer Science")
+
+    assert approver_id == 42
+    params = mock_get.call_args.kwargs["params"]
+    assert params["role"] == "approver"
+    assert params["approver_type"] == "dean"
+    assert params["faculty"] == "ICT"
