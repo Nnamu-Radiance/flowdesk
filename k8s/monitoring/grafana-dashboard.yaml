@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  flowdesk.json: |
+    {
+      "title": "FlowDesk",
+      "uid": "flowdesk",
+      "schemaVersion": 36,
+      "version": 1,
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "id": 1,
+          "title": "HTTP Requests / sec",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "sum(rate(django_http_requests_total_by_method_total[5m])) by (service)",
+              "legendFormat": "{{service}}"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "title": "HTTP Response Status",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "sum(rate(django_http_responses_total_by_status_total[5m])) by (status, service)",
+              "legendFormat": "{{service}} {{status}}"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "title": "Request Latency p95 (s)",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(django_http_requests_latency_seconds_by_view_method_bucket[5m])) by (le, service))",
+              "legendFormat": "{{service}} p95"
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "title": "Memory Usage (MB)",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "process_resident_memory_bytes / 1024 / 1024",
+              "legendFormat": "{{service}}"
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "title": "Python GC Collections / sec",
+          "type": "timeseries",
+          "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "sum(rate(python_gc_collections_total[5m])) by (generation, service)",
+              "legendFormat": "{{service}} gen{{generation}}"
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Responses by Status / sec",
+          "type": "timeseries",
+          "gridPos": { "x": 12, "y": 16, "w": 12, "h": 8 },
+          "targets": [
+            {
+              "expr": "sum(rate(django_http_responses_total_by_status_view_method_total[5m])) by (status, service)",
+              "legendFormat": "{{service}} {{status}}"
+            }
+          ]
+        }
+      ]
+    }

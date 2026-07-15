@@ -17,6 +17,10 @@ spec:
         prometheus.io/path: "/metrics/"
         prometheus.io/port: "8001"
     spec:
+      dnsConfig:
+        nameservers:
+          - 8.8.8.8
+          - 8.8.4.4
       containers:
         - name: auth-service
           image: docker.io/flowdesk/auth-service:latest

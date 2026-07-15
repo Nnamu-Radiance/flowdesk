@@ -1,13 +1,104 @@
 ---
-- name: Deploy FlowDesk to Kubernetes
-  hosts: docker_hosts
+# Deploy FlowDesk to K3s. Pulls latest code and applies all manifests.
+# The flowdesk-secrets K8s secret must already exist on the cluster — apply it manually, never via this playbook.
+# Usage: ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy.yml
+- name: Deploy FlowDesk to K3s
+  hosts: production
   become: yes
-  vars:
-    app_root: /opt/flowdesk
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   tasks:
-    - name: Apply Kubernetes namespace and base resources
+    - name: Pull latest code from main
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_root }}"
+        version: "{{ repo_branch }}"
+        force: yes
+
+    - name: Apply namespace
+      command: kubectl apply -f {{ app_root }}/k8s/namespace.yaml
+
+    - name: Apply network policy
+      command: kubectl apply -f {{ app_root }}/k8s/network-policy.yaml
+
+    - name: Apply configmap
+      command: kubectl apply -f {{ app_root }}/k8s/configmap.yaml
+
+    - name: Apply postgres
+      command: kubectl apply -f {{ app_root }}/k8s/postgres.yaml
+
+    - name: Apply redis
+      command: kubectl apply -f {{ app_root }}/k8s/redis.yaml
+
+    - name: Apply service deployments
+      command: kubectl apply -f {{ app_root }}/k8s/{{ item }}/
+      loop:
+        - auth-service
+        - workflow-service
+        - approval-service
+        - notification-service
+        - analytics-service
+
+    - name: Apply celery worker and beat
+      command: kubectl apply -f {{ app_root }}/k8s/{{ item }}
+      loop:
+        - celery-worker.yaml
+        - celery-beat.yaml
+
+    - name: Apply frontend
+      command: kubectl apply -f {{ app_root }}/k8s/frontend/
+
+    - name: Apply ingress
+      command: kubectl apply -f {{ app_root }}/k8s/ingress.yaml
+
+    - name: Resolve service ClusterIPs and apply nginx configmap
       shell: |
-        kubectl apply -f {{ app_root }}/k8s/namespace.yaml
-        kubectl apply -f {{ app_root }}/k8s/configmap.yaml
-        kubectl apply -f {{ app_root }}/k8s/secret.yaml
-        kubectl apply -k {{ app_root }}/k8s
+        set -e
+        AUTH_IP=$(kubectl -n flowdesk get svc auth-service -o jsonpath='{.spec.clusterIP}')
+        WORKFLOW_IP=$(kubectl -n flowdesk get svc workflow-service -o jsonpath='{.spec.clusterIP}')
+        APPROVAL_IP=$(kubectl -n flowdesk get svc approval-service -o jsonpath='{.spec.clusterIP}')
+        NOTIFICATION_IP=$(kubectl -n flowdesk get svc notification-service -o jsonpath='{.spec.clusterIP}')
+        ANALYTICS_IP=$(kubectl -n flowdesk get svc analytics-service -o jsonpath='{.spec.clusterIP}')
+        FRONTEND_IP=$(kubectl -n flowdesk get svc frontend -o jsonpath='{.spec.clusterIP}')
+        sed -e "s/__AUTH_IP__/${AUTH_IP}/g" \
+            -e "s/__WORKFLOW_IP__/${WORKFLOW_IP}/g" \
+            -e "s/__APPROVAL_IP__/${APPROVAL_IP}/g" \
+            -e "s/__NOTIFICATION_IP__/${NOTIFICATION_IP}/g" \
+            -e "s/__ANALYTICS_IP__/${ANALYTICS_IP}/g" \
+            -e "s/__FRONTEND_IP__/${FRONTEND_IP}/g" \
+            {{ app_root }}/k8s/nginx/configmap.yaml | kubectl apply -f -
+
+    - name: Apply nginx deployment
+      command: kubectl apply -f {{ app_root }}/k8s/nginx/deployment.yaml
+
+    - name: Restart nginx to pick up new configmap
+      command: kubectl -n flowdesk rollout restart deployment/nginx
+
+    - name: Apply monitoring stack (except Grafana datasource)
+      command: kubectl apply -f {{ app_root }}/k8s/monitoring/{{ item }}
+      loop:
+        - namespace.yaml
+        - prometheus-rbac.yaml
+        - prometheus-config.yaml
+        - prometheus-deployment.yaml
+        - grafana-provider.yaml
+        - grafana-dashboard.yaml
+        - grafana-deployment.yaml
+      ignore_errors: true
+
+    - name: Resolve Prometheus ClusterIP and apply Grafana datasource
+      shell: |
+        set -e
+        PROM_IP=$(kubectl -n monitoring get svc prometheus -o jsonpath='{.spec.clusterIP}')
+        sed -e "s/__PROMETHEUS_IP__/${PROM_IP}/g" \
+            {{ app_root }}/k8s/monitoring/grafana-config.yaml | kubectl apply -f -
+
+    - name: Wait for core services to be ready
+      command: kubectl -n flowdesk wait deployment/{{ item }} --for=condition=available --timeout=300s
+      loop:
+        - auth-service
+        - workflow-service
+        - approval-service
+        - notification-service
+        - analytics-service
+        - nginx
