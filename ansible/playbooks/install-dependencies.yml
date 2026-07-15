@@ -1,27 +1,45 @@
 ---
-- name: Install base dependencies
-  hosts: all
+# Install system dependencies on an existing server (not a full provision).
+# For a fresh server use provision.yml instead.
+# Usage: ansible-playbook -i ansible/inventory.ini ansible/playbooks/install-dependencies.yml
+- name: Install FlowDesk system dependencies
+  hosts: production
   become: yes
   tasks:
     - name: Update apt cache
       apt:
         update_cache: yes
-      when: ansible_os_family == "Debian"
+        cache_valid_time: 3600
 
-    - name: Install packages
+    - name: Install base packages
       apt:
         name:
-          - docker.io
-          - docker-compose
-          - python3-pip
-          - kubectl
-          - curl
           - git
+          - curl
+          - wget
+          - python3-pip
         state: present
-      when: ansible_os_family == "Debian"
 
-    - name: Ensure docker service running
+    - name: Ensure Docker is installed
+      command: docker --version
+      register: docker_check
+      ignore_errors: true
+
+    - name: Install Docker if missing
+      shell: curl -fsSL https://get.docker.com | sh -
+      when: docker_check.rc != 0
+
+    - name: Ensure Docker service is running
       service:
         name: docker
         state: started
         enabled: yes
+
+    - name: Ensure k3s is installed
+      command: k3s --version
+      register: k3s_check
+      ignore_errors: true
+
+    - name: Install k3s if missing
+      shell: curl -sfL https://get.k3s.io | sh -
+      when: k3s_check.rc != 0

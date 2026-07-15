@@ -1,0 +1,60 @@
+---
+# Run once on a fresh Lightsail server to install k3s, Docker, and clone the repo.
+# Usage: ansible-playbook -i ansible/inventory.ini ansible/playbooks/provision.yml
+- name: Provision fresh Lightsail server
+  hosts: production
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      apt:
+        name:
+          - git
+          - curl
+          - wget
+          - unzip
+          - python3-pip
+        state: present
+
+    - name: Install k3s
+      shell: curl -sfL https://get.k3s.io | sh -
+      args:
+        creates: /usr/local/bin/k3s
+
+    - name: Install Docker
+      shell: curl -fsSL https://get.docker.com | sh -
+      args:
+        creates: /usr/bin/docker
+
+    - name: Ensure Docker service is running
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Create kubectl wrapper that sets KUBECONFIG
+      copy:
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+        content: |
+          #!/bin/sh
+          if [ -z "${KUBECONFIG:-}" ] && [ -r /etc/rancher/k3s/k3s.yaml ]; then
+            export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+          fi
+          exec /usr/local/bin/k3s kubectl "$@"
+
+    - name: Create app directory
+      file:
+        path: "{{ app_root }}"
+        state: directory
+        mode: "0755"
+
+    - name: Clone FlowDesk repo
+      git:
+        repo: "{{ repo_url }}"
+        dest: "{{ app_root }}"
+        version: "{{ repo_branch }}"

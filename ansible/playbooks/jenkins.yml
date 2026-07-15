@@ -1,0 +1,30 @@
+---
+# Ensure the Jenkins container is running. Run this after any server reboot.
+# Usage: ansible-playbook -i ansible/inventory.ini ansible/playbooks/jenkins.yml
+- name: Ensure Jenkins container is running
+  hosts: production
+  become: yes
+  tasks:
+    - name: Check Jenkins container state
+      command: docker inspect -f "{{ '{{' }}.State.Status{{ '}}' }}" {{ jenkins_container }}
+      register: jenkins_state
+      ignore_errors: yes
+
+    - name: Restart Jenkins container if it exists but is stopped
+      command: docker restart {{ jenkins_container }}
+      when:
+        - jenkins_state.rc == 0
+        - jenkins_state.stdout != 'running'
+
+    - name: Start Jenkins from compose if container does not exist
+      shell: cd {{ app_root }} && docker compose up -d jenkins
+      when: jenkins_state.rc != 0
+
+    - name: Wait for Jenkins to be ready
+      uri:
+        url: "http://localhost:{{ jenkins_port }}/login"
+        status_code: 200
+      register: jenkins_ready
+      retries: 15
+      delay: 10
+      until: jenkins_ready.status == 200

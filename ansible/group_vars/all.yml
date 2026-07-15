@@ -1,2 +1,8 @@
 app_name: flowdesk
-app_root: /opt/flowdesk
+app_root: /var/www/flowdesk
+repo_url: https://github.com/Nnamu-Radiance/flowdesk
+repo_branch: main
+k8s_namespace: flowdesk
+monitoring_namespace: monitoring
+jenkins_container: flowdesk-jenkins
+jenkins_port: 8081
