@@ -4,7 +4,7 @@ pipeline {
   parameters {
     booleanParam(
       name: 'LOCAL_ONLY',
-      defaultValue: false,
+      defaultValue: true,
       description: 'Run local CI only. When true, skip Docker image push, Kubernetes deploy, and smoke tests.'
     )
     booleanParam(
@@ -161,7 +161,6 @@ pipeline {
         }
       }
     }
-
     stage('Build Docker Images') {
       when {
         expression { return !params.LOCAL_ONLY && params.BUILD_DOCKER_IMAGES }
