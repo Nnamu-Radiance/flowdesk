@@ -17,7 +17,7 @@
     document.addEventListener('DOMContentLoaded', async () => {
       try {
         const { user, root } = await FlowDeskShell.initPage({ activePage: 'new-request', title: 'New request', allowedRoles: ['submitter'], options: { hideNewRequest: true } });
-        const state = { user, types: [], selected: null, files: {} };
+        const state = { user, types: [], selected: null, files: {}, submitting: false };
         root.innerHTML = `
           <div style="display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:16px;align-items:start">
             <section class="card">
@@ -55,7 +55,8 @@
             <aside class="card">
               <div class="card-hd"><h2 class="card-title">Request summary</h2></div>
               <div id="summary" style="display:grid;gap:10px;color:#64748b;font-size:11px">Select a request type to continue.</div>
-              <button id="submit-request" class="btn btn-primary w-full" type="button" disabled style="margin-top:12px">Submit request</button>
+              <button id="submit-request" class="btn btn-primary w-full" type="button" style="margin-top:12px">Submit request</button>
+              <p id="submit-hint" class="text-gray-600" style="font-size:11px;margin:8px 0 0"></p>
               <button id="save-draft" class="btn btn-secondary w-full" type="button" style="margin-top:8px">Save as draft</button>
             </aside>
           </div>
@@ -71,6 +72,31 @@
 
         function selectedDocs() {
           return state.selected?.required_docs || [];
+        }
+
+        function uploadableDocs() {
+          return selectedDocs().filter((doc) => doc.toLowerCase() !== 'none');
+        }
+
+        function submissionBlockers() {
+          if (!state.selected) return ['Choose a request type.'];
+
+          const docs = uploadableDocs();
+          const uploaded = Object.keys(state.files);
+          if (docs.length && state.selected.all_documents_required) {
+            const missing = docs.filter((slug) => !state.files[slug]);
+            if (missing.length) return [`Upload: ${missing.map(docLabel).join(', ')}.`];
+          } else if (docs.length && uploaded.length === 0) {
+            return ['Upload at least one required document.'];
+          }
+
+          const supervisorWrap = document.getElementById('supervisor-wrap');
+          const supervisor = document.getElementById('supervisor');
+          if (supervisorWrap && !supervisorWrap.classList.contains('hidden') && !supervisor.value) {
+            return ['Choose a supervisor.'];
+          }
+
+          return [];
         }
 
         // Fields always handled explicitly — don't render as dynamic textareas
@@ -92,16 +118,18 @@
         }
 
         function updateSubmitState() {
-          const required = selectedDocs();
-          const allRequired = state.selected?.all_documents_required;
-          const okDocs = !allRequired || required.every((slug) => state.files[slug]);
-          const okSupervisor = document.getElementById('supervisor-wrap').classList.contains('hidden') || document.getElementById('supervisor').value;
-          document.getElementById('submit-request').disabled = !state.selected || !okDocs || !okSupervisor;
-          document.getElementById('doc-counter').textContent = `${Object.keys(state.files).length} of ${required.length} documents uploaded`;
+          const docs = uploadableDocs();
+          const blockers = submissionBlockers();
+          const button = document.getElementById('submit-request');
+          const hint = document.getElementById('submit-hint');
+          button.disabled = state.submitting || !state.selected;
+          hint.textContent = state.selected ? (blockers[0] || 'Ready to submit.') : 'Choose a request type to continue.';
+          hint.style.color = blockers.length ? '#b45309' : '#15803d';
+          document.getElementById('doc-counter').textContent = `${Object.keys(state.files).length} of ${docs.length} documents uploaded`;
         }
 
         function renderDocuments() {
-          const docs = selectedDocs().filter((doc) => doc.toLowerCase() !== 'none');
+          const docs = uploadableDocs();
           document.getElementById('documents-section').classList.toggle('hidden', docs.length === 0);
           document.getElementById('document-slots').innerHTML = docs.map((slug) => {
             const file = state.files[slug];
@@ -178,6 +206,19 @@
         });
 
         document.getElementById('submit-request').addEventListener('click', async () => {
+          const blockers = submissionBlockers();
+          if (blockers.length) {
+            updateSubmitState();
+            showToast(blockers[0], 'warning');
+            return;
+          }
+
+          const submitButton = document.getElementById('submit-request');
+          state.submitting = true;
+          submitButton.disabled = true;
+          submitButton.textContent = 'Submitting...';
+          updateSubmitState();
+
           const formData = new FormData();
           const formPayload = {
             full_name: FlowDeskShell.fullName(user),
@@ -207,7 +248,11 @@
             showToast('Request submitted successfully - you will be notified of updates.', 'success');
             window.location.href = `/static/pages/workflow-detail.html?id=${created.id}`;
           } catch (error) {
-            showToast(error.message, 'error');
+            showToast(`Submit failed: ${error.message}`, 'error');
+          } finally {
+            state.submitting = false;
+            submitButton.textContent = 'Submit request';
+            updateSubmitState();
           }
         });
       } catch (error) {
