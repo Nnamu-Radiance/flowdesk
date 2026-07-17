@@ -479,11 +479,21 @@ print(jwt.encode(payload, os.environ["JWT_SECRET_KEY"], algorithm="HS256"))
 PY
 )
           response_file=$(mktemp)
+          request_body=$(SMOKE_TYPE_ID="${smoke_type_id}" python3 - <<'PY'
+import json
+import os
+
+print(json.dumps({
+    "workflow_type_id": int(os.environ["SMOKE_TYPE_ID"]),
+    "form_data": {},
+}))
+PY
+)
           status_code=$(curl -sS -o "${response_file}" -w "%{http_code}" \
             -H "Host: ${host_header}" \
             -H "Authorization: Bearer ${token}" \
             -H "Content-Type: application/json" \
-            --data "{\"workflow_type_id\": ${smoke_type_id}, \"form_data\": {}}" \
+            --data "${request_body}" \
             "${base_url}/api/workflows/")
           cat "${response_file}"
           test "${status_code}" = "201"
