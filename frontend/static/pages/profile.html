@@ -28,6 +28,7 @@
         });
         currentUser = init.user;
         const root = init.root;
+        const canManageStamp = ['approver', 'admin'].includes(currentUser.role);
 
         // Faculty → Majors mapping
         // BMS is still in development — single placeholder option
@@ -114,12 +115,12 @@
                     </div>
                   </div>
                 </div>
-                <div class="form-group">
+                ${canManageStamp ? `<div class="form-group">
                   <label class="form-label">Official Stamp</label>
                   <p class="text-gray-500 text-xs">Optional. Upload your departmental stamp for document validation.</p>
                   <button id="stamp-preview" class="signature-preview signature-upload-box" type="button"></button>
                   <input id="stamp_image" class="hidden" type="file" accept="image/png,image/jpeg">
-                </div>
+                </div>` : ''}
               </div>
             </section>
           </div>
@@ -156,12 +157,14 @@
         document.getElementById('faculty').addEventListener('change', renderMajors);
         renderMajors();
         renderSignaturePreview('signature', currentUser.signature_image);
-        renderSignaturePreview('stamp', currentUser.stamp_image);
+        if (canManageStamp) renderSignaturePreview('stamp', currentUser.stamp_image);
 
         document.getElementById('signature-preview').addEventListener('click', () => document.getElementById('signature_image').click());
-        document.getElementById('stamp-preview').addEventListener('click', () => document.getElementById('stamp_image').click());
         document.getElementById('signature_image').addEventListener('change', (event) => uploadSignatureAsset('signature_image', event.target.files[0]));
-        document.getElementById('stamp_image').addEventListener('change', (event) => uploadSignatureAsset('stamp_image', event.target.files[0]));
+        if (canManageStamp) {
+          document.getElementById('stamp-preview').addEventListener('click', () => document.getElementById('stamp_image').click());
+          document.getElementById('stamp_image').addEventListener('change', (event) => uploadSignatureAsset('stamp_image', event.target.files[0]));
+        }
 
         document.getElementById('save-profile').addEventListener('click', async () => {
           try {
@@ -199,6 +202,10 @@
 
         async function uploadSignatureAsset(field, file) {
           if (!file) return;
+          if (field === 'stamp_image' && !canManageStamp) {
+            showToast('Submitters cannot upload an official stamp.', 'error');
+            return;
+          }
           if (file.size > 200 * 1024) {
             showToast('Image must be under 200KB.', 'error');
             return;
@@ -217,7 +224,7 @@
               user: saved,
             });
             renderSignaturePreview('signature', saved.signature_image);
-            renderSignaturePreview('stamp', saved.stamp_image);
+            if (canManageStamp) renderSignaturePreview('stamp', saved.stamp_image);
             showToast('Signature settings updated.', 'success');
           } catch (error) {
             showToast(error.message, 'error');
