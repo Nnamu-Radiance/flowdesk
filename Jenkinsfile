@@ -185,6 +185,36 @@ pipeline {
                   else
                     curl -fsS "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=flowdesk" | python3 -m json.tool || true
                   fi
+                  echo "---- SonarQube new code issues ----"
+                  if [ -n "${SONAR_AUTH_TOKEN:-}" ]; then
+                    issues_json=$(curl -fsS -u "${SONAR_AUTH_TOKEN}:" "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk&inNewCodePeriod=true&resolved=false&ps=50") || issues_json='{}'
+                  else
+                    issues_json=$(curl -fsS "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk&inNewCodePeriod=true&resolved=false&ps=50") || issues_json='{}'
+                  fi
+                  printf '%s' "${issues_json}" | python3 - <<'PY' || true
+import json
+import sys
+
+try:
+    payload = json.loads(sys.stdin.read() or "{}")
+except json.JSONDecodeError:
+    print("Could not parse Sonar issues payload")
+    raise SystemExit(0)
+
+issues = payload.get("issues", [])
+if not issues:
+    print("No unresolved issues returned for new code period.")
+    raise SystemExit(0)
+
+for issue in issues:
+    component = issue.get("component", "")
+    path = component.split(":", 1)[-1] if ":" in component else component
+    line = issue.get("line", "?")
+    rule = issue.get("rule", "?")
+    severity = issue.get("severity", "?")
+    message = issue.get("message", "")
+    print(f"- [{severity}] {rule} at {path}:{line} :: {message}")
+PY
                   echo "---- End SonarQube quality gate details ----"
                 '''
               }
