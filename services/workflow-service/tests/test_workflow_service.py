@@ -1,6 +1,8 @@
 import pytest
 from rest_framework.test import APIClient
 from django.urls import reverse
+from django.utils.datastructures import MultiValueDict
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock
 
 from apps.workflows.models import Workflow
@@ -107,6 +109,96 @@ def test_workflow_create_logs_unexpected_errors():
         pytest.raises(RuntimeError, match="boom"),
     ):
         WorkflowViewSet().create(request)
+
+
+@pytest.mark.django_db
+def test_workflow_create_helpers_cover_validation_and_documents():
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from django.utils import timezone
+
+    from apps.workflows.models import Document, WorkflowType
+    from apps.workflows.service_user import ServiceUser
+    from apps.workflows.views import (
+        attach_documents,
+        create_submitted_workflow,
+        csv_file_required_response,
+        dispatch_document_processing,
+        fill_profile_form_fields,
+        parse_document_labels,
+        parse_form_data,
+        uploaded_document_map,
+        validate_required_documents,
+    )
+
+    files = MultiValueDict(
+        {
+            "documents": [SimpleUploadedFile("transcript.pdf", b"pdf")],
+            "document_birth_certificate": [SimpleUploadedFile("birth.pdf", b"pdf")],
+        }
+    )
+    request = SimpleNamespace(
+        data={
+            "form_data": '{"notes": "ready"}',
+            "document_labels": '["transcript"]',
+        },
+        FILES=files,
+        user=ServiceUser(user_id=12, role="submitter"),
+        auth={
+            "full_name": "Ada Student",
+            "matricule": "MAT-12",
+            "faculty": "Science",
+            "department": "Physics",
+        },
+    )
+
+    assert csv_file_required_response().status_code == 400
+    assert parse_form_data(request) == {"notes": "ready"}
+    request.data["form_data"] = "{bad json"
+    with pytest.raises(ValueError, match="form_data must be valid JSON"):
+        parse_form_data(request)
+    request.data["form_data"] = {"notes": "ready"}
+    assert parse_form_data(request) == {"notes": "ready"}
+
+    form_data = {"notes": "ready"}
+    missing = fill_profile_form_fields(request, form_data, {"full_name", "faculty", "notes"})
+    assert missing == []
+    assert form_data["full_name"] == "Ada Student"
+    assert form_data["faculty"] == "Science"
+
+    workflow_type = WorkflowType.objects.create(
+        name="Clearance",
+        approval_type="academic",
+        required_docs=["transcript", "birth_certificate"],
+        form_fields=["full_name", "faculty", "notes"],
+        expected_output="Clearance letter",
+        all_documents_required=True,
+    )
+    label_to_file = uploaded_document_map(request, workflow_type)
+    assert set(label_to_file) == {"transcript", "birth_certificate"}
+    assert validate_required_documents(workflow_type, label_to_file) is None
+    assert validate_required_documents(workflow_type, {"transcript": label_to_file["transcript"]}).status_code == 400
+
+    workflow_type.all_documents_required = False
+    assert validate_required_documents(workflow_type, {}).status_code == 400
+    workflow_type.required_docs = []
+    assert validate_required_documents(workflow_type, {}) is None
+
+    workflow = create_submitted_workflow(request, workflow_type, form_data, timezone.now())
+    attach_documents(workflow, label_to_file)
+    assert Document.objects.filter(workflow=workflow).count() == 2
+    with patch("apps.workflows.views.process_document.delay") as mock_delay:
+        dispatch_document_processing(workflow)
+    mock_delay.assert_called_once_with(workflow.id)
+
+
+def test_workflow_parse_document_labels_falls_back_for_invalid_json():
+    from apps.workflows.views import parse_document_labels
+
+    request = SimpleNamespace(data={"document_labels": "[not json]"})
+    assert parse_document_labels(request) == []
+
+    request = SimpleNamespace(data={"document_labels": ["passport"]})
+    assert parse_document_labels(request) == ["passport"]
 
 
 @pytest.mark.django_db

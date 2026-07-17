@@ -50,7 +50,7 @@ pipeline {
     booleanParam(
       name: 'PUSH_TO_REGISTRY',
       defaultValue: false,
-      description: 'Push built images to REGISTRY. Leave false when Jenkins and Kubernetes use the same local image runtime.'
+      description: 'Push built images to REGISTRY. Leave false only when Jenkins can import images into the local Kubernetes container runtime.'
     )
     string(
       name: 'SMOKE_BASE_URL',
@@ -227,6 +227,38 @@ PY
         }
       }
     }
+    stage('Kubernetes Image Import Preflight') {
+      when {
+        expression { return !params.LOCAL_ONLY && params.BUILD_DOCKER_IMAGES && !params.PUSH_TO_REGISTRY }
+      }
+      steps {
+        sh '''
+          set -e
+          echo "---- Kubernetes image import preflight ----"
+          id
+          ls -l /run/k3s/containerd/containerd.sock || true
+
+          if command -v k3s >/dev/null 2>&1 && k3s ctr -n k8s.io images ls >/dev/null 2>&1; then
+            echo "Using k3s ctr for local Kubernetes image imports."
+            exit 0
+          fi
+          if command -v ctr >/dev/null 2>&1 && ctr -n k8s.io images ls >/dev/null 2>&1; then
+            echo "Using ctr for local Kubernetes image imports."
+            exit 0
+          fi
+          if command -v nerdctl >/dev/null 2>&1 && nerdctl -n k8s.io images >/dev/null 2>&1; then
+            echo "Using nerdctl for local Kubernetes image imports."
+            exit 0
+          fi
+
+          echo "Jenkins cannot reach the local Kubernetes container runtime for image imports."
+          echo "Either fix the k3s/containerd socket mount and service, or run this job with PUSH_TO_REGISTRY=true so Kubernetes pulls images from ${REGISTRY}/${IMAGE_NAMESPACE}."
+          echo "For bundled same-server k3s deploys, verify k3s is running on the host and recreate Jenkins with /run/k3s/containerd mounted."
+          exit 1
+        '''
+      }
+    }
+
     stage('Build Docker Images') {
       when {
         expression { return !params.LOCAL_ONLY && params.BUILD_DOCKER_IMAGES }
@@ -275,14 +307,14 @@ PY
 
           import_image_archive() {
             archive="$1"
-            if command -v k3s >/dev/null 2>&1; then
+            if command -v k3s >/dev/null 2>&1 && k3s ctr -n k8s.io images ls >/dev/null 2>&1; then
               k3s ctr -n k8s.io images import "$archive"
-            elif command -v ctr >/dev/null 2>&1; then
+            elif command -v ctr >/dev/null 2>&1 && ctr -n k8s.io images ls >/dev/null 2>&1; then
               ctr -n k8s.io images import "$archive"
-            elif command -v nerdctl >/dev/null 2>&1; then
+            elif command -v nerdctl >/dev/null 2>&1 && nerdctl -n k8s.io images >/dev/null 2>&1; then
               nerdctl -n k8s.io load -i "$archive"
             else
-              echo "No supported Kubernetes image import tool found. Install k3s, ctr, or nerdctl on the Jenkins agent, or run with PUSH_TO_REGISTRY=true."
+              echo "No working Kubernetes image import tool found. Fix k3s/containerd access, or run with PUSH_TO_REGISTRY=true."
               exit 1
             fi
           }
