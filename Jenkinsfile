@@ -18,6 +18,11 @@ pipeline {
       description: 'Run unit tests.'
     )
     booleanParam(
+      name: 'ENFORCE_QUALITY_GATE',
+      defaultValue: false,
+      description: 'Fail the pipeline when the SonarQube quality gate is not OK. When false, mark the build unstable and continue deployment.'
+    )
+    booleanParam(
       name: 'BUILD_DOCKER_IMAGES',
       defaultValue: true,
       description: 'Build Docker images. When false, image push/import is skipped and deploy keeps current images unless DEPLOY_IMAGE_TAG is set.'
@@ -95,6 +100,7 @@ pipeline {
 
           echo "RUN_LINT=${params.RUN_LINT}"
           echo "RUN_UNIT_TESTS=${params.RUN_UNIT_TESTS}"
+          echo "ENFORCE_QUALITY_GATE=${params.ENFORCE_QUALITY_GATE}"
           echo "BUILD_DOCKER_IMAGES=${params.BUILD_DOCKER_IMAGES}"
           echo "PUSH_TO_REGISTRY=${params.PUSH_TO_REGISTRY}"
           echo "IMAGE_TAG=${env.IMAGE_TAG ?: '(keeping current deployment images)'}"
@@ -165,7 +171,16 @@ pipeline {
     stage('Quality Gate') {
       steps {
         timeout(time: 5, unit: 'MINUTES') {
-          waitForQualityGate abortPipeline: true
+          script {
+            def qualityGate = waitForQualityGate abortPipeline: false
+            echo "SonarQube quality gate status: ${qualityGate.status}"
+            if (qualityGate.status != 'OK') {
+              currentBuild.result = 'UNSTABLE'
+              if (params.ENFORCE_QUALITY_GATE) {
+                error "Pipeline aborted due to quality gate failure: ${qualityGate.status}"
+              }
+            }
+          }
         }
       }
     }
