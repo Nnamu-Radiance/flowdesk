@@ -52,6 +52,62 @@ def test_workflow_crud(api_client, django_user_model):
 
 
 @pytest.mark.django_db
+def test_workflow_create_survives_document_task_dispatch_failure(api_client):
+    from apps.workflows.models import WorkflowType
+
+    workflow_type = WorkflowType.objects.create(name="Permit", approval_chain=["dean"])
+
+    with (
+        patch("apps.workflows.views.process_document.delay", side_effect=RuntimeError("broker down")),
+        patch("apps.workflows.views.WorkflowService.dispatch_workflow_created") as mock_dispatch,
+    ):
+        response = api_client.post("/api/workflows/", {"workflow_type_id": workflow_type.id}, format="json")
+
+    assert response.status_code == 201
+    workflow = Workflow.objects.get(workflow_type=workflow_type, created_by_id=1)
+    mock_dispatch.assert_called_once()
+    assert mock_dispatch.call_args.args[0] == workflow
+
+
+@pytest.mark.django_db
+def test_workflow_created_dispatch_logs_async_failures(django_capture_on_commit_callbacks):
+    from apps.workflows.models import WorkflowType
+    from apps.workflows.services import WorkflowService
+
+    workflow_type = WorkflowType.objects.create(name="Permit", approval_chain=["dean"])
+    workflow = Workflow.objects.create(name="Permit", workflow_type=workflow_type, created_by_id=1)
+
+    with (
+        patch("apps.workflows.services.current_app.send_task", side_effect=RuntimeError("broker down")) as mock_send,
+        patch("apps.workflows.services.publish_workflow_created", side_effect=RuntimeError("pubsub down")) as mock_publish,
+        django_capture_on_commit_callbacks(execute=True),
+    ):
+        WorkflowService.dispatch_workflow_created(workflow, "corr-1")
+
+    mock_send.assert_called_once()
+    mock_publish.assert_called_once_with(workflow, "corr-1")
+
+
+@pytest.mark.django_db
+def test_workflow_create_logs_unexpected_errors():
+    from apps.workflows.views import WorkflowViewSet
+
+    request = MagicMock()
+    request.user.id = 1
+    request.data = {"workflow_type_id": "broken"}
+    request.correlation_id = "corr-1"
+
+    with (
+        patch.object(WorkflowViewSet, "_create", side_effect=RuntimeError("boom")),
+        patch("apps.workflows.views.logger.exception") as mock_log,
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        WorkflowViewSet().create(request)
+
+    mock_log.assert_called_once()
+
+
+@pytest.mark.django_db
 def test_workflow_submit(api_client):
     workflow = Workflow.objects.create(name="Submittable", created_by_id=1)
     
