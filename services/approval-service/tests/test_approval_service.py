@@ -71,7 +71,6 @@ def test_reassign(api_client):
     mock_publish.assert_called_once_with(
         "approval.requested",
         {"workflow_id": chain.workflow_id, "approver_id": 99},
-        "approval-service",
         correlation_id=ANY,
     )
 
@@ -143,14 +142,13 @@ def test_approval_service_return_marks_chain_and_publishes_event():
     assert current.status == ApprovalStep.Status.RETURNED
     assert pending.status == ApprovalStep.Status.VOID
     mock_publish.assert_called_once()
-    event_name, payload, source = mock_publish.call_args.args
+    event_name, payload = mock_publish.call_args.args
     assert event_name == "approval.returned"
     assert payload["workflow_id"] == chain.workflow_id
     assert payload["student_id"] == 77
     assert payload["workflow_type_name"] == "Transcript"
     assert payload["step_number"] == 1
     assert payload["send_feedback_to_student"] is True
-    assert source == "approval-service"
     assert mock_publish.call_args.kwargs["correlation_id"] == "corr-return"
 
 

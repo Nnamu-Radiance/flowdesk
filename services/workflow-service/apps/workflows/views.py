@@ -34,6 +34,7 @@ WORKFLOW_TYPE_FIELDS = {
     "sla_days",
     "is_active",
 }
+CSV_FILE_REQUIRED = "CSV file required"
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,120 @@ def serialize_csv_preview_row(row):
     }
 
 
+def csv_file_required_response():
+    return response.Response({"detail": CSV_FILE_REQUIRED}, status=status.HTTP_400_BAD_REQUEST)
+
+
+def parse_form_data(request):
+    raw_form_data = request.data.get("form_data", {})
+    if isinstance(raw_form_data, str):
+        try:
+            return json.loads(raw_form_data or "{}")
+        except json.JSONDecodeError as exc:
+            raise ValueError("form_data must be valid JSON") from exc
+    return dict(raw_form_data)
+
+
+def fill_profile_form_fields(request, form_data, required_fields):
+    missing_fields = [
+        field for field in required_fields
+        if field not in form_data or form_data.get(field) is None
+    ]
+    for field in ["faculty", "department", "matricule", "full_name"]:
+        claim_value = profile_claim(request, field)
+        if claim_value and field in required_fields and not form_data.get(field):
+            form_data[field] = claim_value
+            if field in missing_fields:
+                missing_fields.remove(field)
+    return missing_fields
+
+
+def parse_document_labels(request):
+    document_labels = request.data.get("document_labels", "[]")
+    if not isinstance(document_labels, str):
+        return document_labels
+    try:
+        return json.loads(document_labels)
+    except json.JSONDecodeError:
+        return []
+
+
+def uploaded_document_map(request, workflow_type):
+    files = request.FILES.getlist("documents")
+    document_labels = parse_document_labels(request)
+    label_to_file = {
+        label: files[index]
+        for index, label in enumerate(document_labels)
+        if index < len(files)
+    }
+    for label in workflow_type.required_docs:
+        keyed_file = request.FILES.get(f"document_{label}") or request.FILES.get(label)
+        if keyed_file:
+            label_to_file[label] = keyed_file
+    return label_to_file
+
+
+def validate_required_documents(workflow_type, label_to_file):
+    if not workflow_type.required_docs:
+        return None
+
+    uploaded_required_docs = [label for label in workflow_type.required_docs if label in label_to_file]
+    if workflow_type.all_documents_required:
+        missing_docs = [label for label in workflow_type.required_docs if label not in label_to_file]
+        if missing_docs:
+            return response.Response(
+                {"detail": "Missing required documents", "documents": missing_docs},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+    elif not uploaded_required_docs:
+        return response.Response(
+            {"detail": "At least one required document must be uploaded", "documents": workflow_type.required_docs},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    return None
+
+
+def create_submitted_workflow(request, workflow_type, form_data, submitted_at):
+    student_name = profile_claim(request, "full_name") or profile_claim(request, "name") or request.user.username
+    return Workflow.objects.create(
+        workflow_type=workflow_type,
+        name=f"{workflow_type.name} - {student_name} - {submitted_at.date().isoformat()}",
+        description=workflow_type.description,
+        approval_type=workflow_type.approval_type,
+        status=Workflow.Status.SUBMITTED,
+        created_by_id=request.user.id,
+        student_name=student_name,
+        student_matricule=profile_claim(request, "matricule"),
+        student_faculty=profile_claim(request, "faculty") or form_data.get("faculty", ""),
+        form_data=form_data,
+        deadline=submitted_at + timedelta(days=workflow_type.sla_days),
+        submitted_at=submitted_at,
+        priority=workflow_type.priority,
+        tags=workflow_type.tags,
+        metadata={"expected_output": workflow_type.expected_output},
+        all_documents_required=workflow_type.all_documents_required,
+    )
+
+
+def attach_documents(workflow, label_to_file):
+    for label, file_obj in label_to_file.items():
+        Document.objects.create(
+            doc_id=f"DOC-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8].upper()}",
+            workflow=workflow,
+            document_label=label,
+            filename=file_obj.name,
+            document_type=file_obj.name.split(".")[-1].lower(),
+            file=file_obj,
+        )
+
+
+def dispatch_document_processing(workflow):
+    try:
+        process_document.delay(workflow.id)
+    except (CeleryError, KombuError, OSError):
+        logger.exception("workflow document task dispatch failed workflow_id=%s", workflow.id)
+
+
 class WorkflowConfigListView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -91,7 +206,7 @@ class WorkflowConfigUploadView(views.APIView):
     def post(self, request):
         csv_file = request.FILES.get("file")
         if not csv_file:
-            return response.Response({"detail": "CSV file required"}, status=status.HTTP_400_BAD_REQUEST)
+            return csv_file_required_response()
 
         text = csv_file.read().decode("utf-8")
         csv_file.seek(0)
@@ -154,7 +269,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     def csv_dry_run(self, request):
         csv_file = request.FILES.get("file")
         if not csv_file:
-            return response.Response({"detail": "CSV file required"}, status=status.HTTP_400_BAD_REQUEST)
+            return csv_file_required_response()
 
         result = parse_workflow_config_csv(csv_file.read().decode("utf-8"))
         return response.Response(
@@ -170,7 +285,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
     def csv_process(self, request):
         csv_file = request.FILES.get("file")
         if not csv_file:
-            return response.Response({"detail": "CSV file required"}, status=status.HTTP_400_BAD_REQUEST)
+            return csv_file_required_response()
 
         task = process_csv_bulk.delay(csv_file.read().decode("utf-8"), request.user.id)
         return response.Response({"task_id": task.id, "status": "processing"}, status=status.HTTP_202_ACCEPTED)
@@ -187,86 +302,26 @@ class WorkflowViewSet(viewsets.ModelViewSet):
         if not workflow_type:
             return response.Response({"detail": "Workflow type not found"}, status=status.HTTP_400_BAD_REQUEST)
 
-        raw_form_data = request.data.get("form_data", {})
-        if isinstance(raw_form_data, str):
-            try:
-                form_data = json.loads(raw_form_data or "{}")
-            except json.JSONDecodeError:
-                return response.Response({"detail": "form_data must be valid JSON"}, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            form_data = dict(raw_form_data)
+        try:
+            form_data = parse_form_data(request)
+        except ValueError as exc:
+            return response.Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
 
         required_fields = set(workflow_type.form_fields)
-        missing_fields = [field for field in required_fields if field not in form_data or form_data.get(field) is None]
-        for field in ["faculty", "department", "matricule", "full_name"]:
-            claim_value = profile_claim(request, field)
-            if claim_value and field in required_fields and not form_data.get(field):
-                form_data[field] = claim_value
-                if field in missing_fields:
-                    missing_fields.remove(field)
+        missing_fields = fill_profile_form_fields(request, form_data, required_fields)
         if missing_fields:
             return response.Response({"detail": "Missing form fields", "fields": missing_fields},
                                      status=status.HTTP_400_BAD_REQUEST)
 
-        document_labels = request.data.get("document_labels", "[]")
-        if isinstance(document_labels, str):
-            try:
-                document_labels = json.loads(document_labels)
-            except json.JSONDecodeError:
-                document_labels = []
-        files = request.FILES.getlist("documents")
-        label_to_file = {label: files[index] for index, label in enumerate(document_labels) if index < len(files)}
-        for label in workflow_type.required_docs:
-            keyed_file = request.FILES.get(f"document_{label}") or request.FILES.get(label)
-            if keyed_file:
-                label_to_file[label] = keyed_file
-        uploaded_required_docs = [label for label in workflow_type.required_docs if label in label_to_file]
-        if workflow_type.required_docs and workflow_type.all_documents_required:
-            missing_docs = [label for label in workflow_type.required_docs if label not in label_to_file]
-            if missing_docs:
-                return response.Response({"detail": "Missing required documents",
-                                         "documents": missing_docs}, status=status.HTTP_400_BAD_REQUEST)
-        elif workflow_type.required_docs and not uploaded_required_docs:
-            return response.Response(
-                {"detail": "At least one required document must be uploaded", "documents": workflow_type.required_docs},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        label_to_file = uploaded_document_map(request, workflow_type)
+        document_error = validate_required_documents(workflow_type, label_to_file)
+        if document_error:
+            return document_error
 
         submitted_at = timezone.now()
-        student_name = profile_claim(request, "full_name") or profile_claim(request, "name") or request.user.username
-        workflow = Workflow.objects.create(
-            workflow_type=workflow_type,
-            name=f"{workflow_type.name} - {student_name} - {submitted_at.date().isoformat()}",
-            description=workflow_type.description,
-            approval_type=workflow_type.approval_type,
-            status=Workflow.Status.SUBMITTED,
-            created_by_id=request.user.id,
-            student_name=student_name,
-            student_matricule=profile_claim(request, "matricule"),
-            student_faculty=profile_claim(request, "faculty") or form_data.get("faculty", ""),
-            form_data=form_data,
-            deadline=submitted_at + timedelta(days=workflow_type.sla_days),
-            submitted_at=submitted_at,
-            priority=workflow_type.priority,
-            tags=workflow_type.tags,
-            metadata={"expected_output": workflow_type.expected_output},
-            all_documents_required=workflow_type.all_documents_required,
-        )
-
-        for label, file_obj in label_to_file.items():
-            Document.objects.create(
-                doc_id=f"DOC-{timezone.now().strftime('%Y%m%d%H%M%S')}-{uuid.uuid4().hex[:8].upper()}",
-                workflow=workflow,
-                document_label=label,
-                filename=file_obj.name,
-                document_type=file_obj.name.split(".")[-1].lower(),
-                file=file_obj,
-            )
-
-        try:
-            process_document.delay(workflow.id)
-        except (CeleryError, KombuError, OSError):
-            logger.exception("workflow document task dispatch failed workflow_id=%s", workflow.id)
+        workflow = create_submitted_workflow(request, workflow_type, form_data, submitted_at)
+        attach_documents(workflow, label_to_file)
+        dispatch_document_processing(workflow)
         WorkflowService.dispatch_workflow_created(
             workflow,
             getattr(request, "correlation_id", None) or str(uuid.uuid4()),

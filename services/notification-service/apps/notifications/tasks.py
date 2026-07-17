@@ -11,6 +11,7 @@ from django.utils import timezone
 from apps.notifications.models import Notification
 
 logger = logging.getLogger(__name__)
+APPROVAL_DECISION_EVENT = "approval.decision"
 
 
 class RetryTask(Task):
@@ -32,7 +33,7 @@ EVENT_CONFIG = {
         "title": "Approval Requested",
         "message": "A workflow is awaiting your decision.",
     },
-    "approval.decision": {
+    APPROVAL_DECISION_EVENT: {
         "recipient": ("student_id",),
         "template": None,
         "title": "Workflow Decision",
@@ -90,7 +91,7 @@ def recipients_for(event_type: str, payload: dict) -> list[int]:
 
 
 def template_for(event_type: str, payload: dict) -> str:
-    if event_type == "approval.decision":
+    if event_type == APPROVAL_DECISION_EVENT:
         return "workflow_approved" if payload.get("status") == "approved" else "workflow_rejected"
     return EVENT_CONFIG.get(event_type, {}).get("template") or event_type.replace(".", "_")
 
@@ -162,7 +163,7 @@ def handle_event(self, event: dict):
             },
         )
 
-        if config.get("template") is not None or event_type == "approval.decision":
+        if config.get("template") is not None or event_type == APPROVAL_DECISION_EVENT:
             send_email_task.delay(recipient_id, template=template_for(event_type, payload), context=payload)
 
     return {"handled": event_type, "recipients": recipients}

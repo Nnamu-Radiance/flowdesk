@@ -1,5 +1,7 @@
 from django.db import models
 
+RETURNED_FOR_CHANGES_LABEL = "Returned for Changes"
+
 
 class LegacyAliasQuerySet(models.QuerySet):
     field_aliases = {}
@@ -44,7 +46,7 @@ class ApprovalChain(models.Model):
         ACTIVE = "active", "Active"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
-        RETURNED = "returned", "Returned for Changes"
+        RETURNED = "returned", RETURNED_FOR_CHANGES_LABEL
 
     workflow_id = models.IntegerField(unique=True, db_index=True)
     workflow_type_name = models.CharField(max_length=200, blank=True)
@@ -87,7 +89,7 @@ class ApprovalStep(models.Model):
         ACTIVE = "active", "Active"
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
-        RETURNED = "returned", "Returned for Changes"
+        RETURNED = "returned", RETURNED_FOR_CHANGES_LABEL
         REASSIGNED = "reassigned", "Reassigned"
         VOID = "void", "Void"
 
@@ -129,7 +131,7 @@ class ApprovalRecord(models.Model):
     class Action(models.TextChoices):
         APPROVED = "approved", "Approved"
         REJECTED = "rejected", "Rejected"
-        RETURNED = "returned", "Returned for Changes"
+        RETURNED = "returned", RETURNED_FOR_CHANGES_LABEL
         REASSIGNED = "reassigned", "Reassigned"
         COMMENTED = "commented", "Commented"
 

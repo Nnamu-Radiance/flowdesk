@@ -101,7 +101,7 @@ class CreateUserSerializer(SignupSerializer):
         approver_type = validated_data.pop("approver_type", None)
         user = super().create({**validated_data, "password": password})
         user.role = validated_data["role"]
-        user.approver_type = approver_type if validated_data["role"] == "approver" else None
+        user.approver_type = approver_type if validated_data["role"] == "approver" else ""
         user.save(update_fields=["role", "approver_type"])
         user._temporary_password = password
         return user

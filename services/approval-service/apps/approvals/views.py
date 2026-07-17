@@ -8,6 +8,8 @@ from apps.approvals.models import ApprovalChain, ApprovalRecord, ApprovalStep
 from apps.approvals.serializers import ApprovalChainSerializer, ApprovalRecordSerializer
 from apps.approvals.services import ApprovalService
 
+APPROVAL_CHAIN_NOT_FOUND = "Approval chain not found"
+
 
 class IsApprover(permissions.BasePermission):
     def has_permission(self, request, view):
@@ -74,7 +76,7 @@ class ApprovalDecisionView(views.APIView):
     def post(self, request, workflow_id: int):
         chain = ApprovalChain.objects.filter(workflow_id=workflow_id).first()
         if not chain:
-            return response.Response({"detail": "Approval chain not found"}, status=status.HTTP_404_NOT_FOUND)
+            return response.Response({"detail": APPROVAL_CHAIN_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
         action = request.data.get("action")
         if action not in {"approved", "rejected", "returned", "approve", "reject", "return"}:
             return response.Response({"detail": "Invalid action"}, status=status.HTTP_400_BAD_REQUEST)
@@ -132,7 +134,7 @@ class ChainApproveView(views.APIView):
     def post(self, request, chain_id: int):
         chain = ApprovalChain.objects.filter(pk=chain_id).first()
         if not chain:
-            return response.Response({"detail": "Approval chain not found"}, status=status.HTTP_404_NOT_FOUND)
+            return response.Response({"detail": APPROVAL_CHAIN_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
         comments = request.data.get("comments", "")
         try:
             result = ApprovalService.decision(
@@ -156,7 +158,7 @@ class ReassignView(views.APIView):
         chain = (ApprovalChain.objects.filter(workflow_id=workflow_id).first()
                  or ApprovalChain.objects.filter(pk=workflow_id).first())
         if not chain:
-            return response.Response({"detail": "Approval chain not found"}, status=status.HTTP_404_NOT_FOUND)
+            return response.Response({"detail": APPROVAL_CHAIN_NOT_FOUND}, status=status.HTTP_404_NOT_FOUND)
         new_assignee = request.data.get("new_assignee_id") or request.data.get("assignee_id")
         if not new_assignee:
             return response.Response({"detail": "new_assignee_id is required"}, status=status.HTTP_400_BAD_REQUEST)
