@@ -215,6 +215,54 @@ for issue in issues:
     message = issue.get("message", "")
     print(f"- [{severity}] {rule} at {path}:{line} :: {message}")
 PY
+            echo "---- SonarQube files with new violations ----"
+            if [ -n "${SONAR_AUTH_TOKEN:-}" ]; then
+            files_json=$(curl -fsS -u "${SONAR_AUTH_TOKEN}:" "${SONAR_HOST_URL}/api/measures/component_tree?component=flowdesk&metricKeys=new_violations,new_code_smells,new_bugs,new_vulnerabilities&qualifiers=FIL&ps=500") || files_json='{}'
+            all_issues_json=$(curl -fsS -u "${SONAR_AUTH_TOKEN}:" "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk&resolved=false&ps=100") || all_issues_json='{}'
+            else
+            files_json=$(curl -fsS "${SONAR_HOST_URL}/api/measures/component_tree?component=flowdesk&metricKeys=new_violations,new_code_smells,new_bugs,new_vulnerabilities&qualifiers=FIL&ps=500") || files_json='{}'
+            all_issues_json=$(curl -fsS "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk&resolved=false&ps=100") || all_issues_json='{}'
+            fi
+            FILES_JSON="${files_json}" ALL_ISSUES_JSON="${all_issues_json}" python3 - <<'PY' || true
+  import json
+  import os
+
+  def metric_map(comp):
+    return {m.get("metric"): m.get("value", "0") for m in comp.get("measures", [])}
+
+  files_payload = json.loads(os.environ.get("FILES_JSON") or "{}")
+  components = files_payload.get("components", [])
+  flagged = []
+  for comp in components:
+    mm = metric_map(comp)
+    try:
+      new_violations = float(mm.get("new_violations", "0") or "0")
+    except ValueError:
+      new_violations = 0
+    if new_violations > 0:
+      path = comp.get("path") or comp.get("name") or comp.get("key")
+      flagged.append((path, mm.get("new_violations", "0"), mm.get("new_code_smells", "0"), mm.get("new_bugs", "0"), mm.get("new_vulnerabilities", "0")))
+
+  if flagged:
+    for path, nv, ncs, nb, nvu in flagged:
+      print(f"- {path} :: new_violations={nv}, new_code_smells={ncs}, new_bugs={nb}, new_vulnerabilities={nvu}")
+  else:
+    print("No file-level new_violations surfaced via measures/component_tree.")
+
+  issues_payload = json.loads(os.environ.get("ALL_ISSUES_JSON") or "{}")
+  issues = issues_payload.get("issues", [])
+  if issues:
+    print("---- SonarQube unresolved issues (fallback listing) ----")
+    for issue in issues[:20]:
+      component = issue.get("component", "")
+      path = component.split(":", 1)[-1] if ":" in component else component
+      line = issue.get("line", "?")
+      rule = issue.get("rule", "?")
+      severity = issue.get("severity", "?")
+      status = issue.get("status", "?")
+      message = issue.get("message", "")
+      print(f"- [{severity}/{status}] {rule} at {path}:{line} :: {message}")
+  PY
                   echo "---- End SonarQube quality gate details ----"
                 '''
               }
