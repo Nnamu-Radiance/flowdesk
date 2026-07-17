@@ -272,7 +272,10 @@ class WorkflowViewSet(viewsets.ModelViewSet):
                 file=file_obj,
             )
 
-        process_document.delay(workflow.id)
+        try:
+            process_document.delay(workflow.id)
+        except Exception:
+            logger.exception("workflow document task dispatch failed workflow_id=%s", workflow.id)
         WorkflowService.dispatch_workflow_created(
             workflow,
             getattr(request, "correlation_id", None) or str(uuid.uuid4()),
