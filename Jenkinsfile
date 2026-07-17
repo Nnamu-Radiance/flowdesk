@@ -128,6 +128,7 @@ pipeline {
       steps {
         sh '''
           set -e
+          rm -f coverage-*.xml coverage.xml
           for svc in $SERVICES; do
             cd services/$svc
             if [ ! -x venv/bin/python ]; then
@@ -138,7 +139,7 @@ pipeline {
             else
               . venv/bin/activate
             fi
-            pytest tests --cov=apps --cov-fail-under=80
+            pytest tests --cov=apps --cov-report=term-missing --cov-report=xml:../../coverage-${svc}.xml --cov-fail-under=80
             deactivate
             cd ../..
           done
@@ -149,7 +150,14 @@ pipeline {
     stage('SonarQube Analysis') {
       steps {
         withSonarQubeEnv('sonarqube') {
-          sh "${tool 'SonarScanner'}/bin/sonar-scanner"
+          script {
+            def scannerHome = tool 'SonarScanner'
+            sh """
+              set -e
+              ls -l coverage-*.xml
+              ${scannerHome}/bin/sonar-scanner
+            """
+          }
         }
       }
     }
