@@ -191,61 +191,31 @@ pipeline {
                   elif [ -n "${BRANCH_NAME:-}" ]; then
                     sonar_branch_qs="&branch=${BRANCH_NAME}"
                   fi
-                  echo "---- SonarQube new code issues ----"
+                  echo "---- SonarQube unresolved issues ----"
                   if [ -n "${SONAR_AUTH_TOKEN:-}" ]; then
-                    issues_json=$(curl -fsS -u "${SONAR_AUTH_TOKEN}:" "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk${sonar_branch_qs}&inNewCodePeriod=true&resolved=false&ps=50") || issues_json='{}'
+                    issues_json=$(curl -fsS -u "${SONAR_AUTH_TOKEN}:" "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk${sonar_branch_qs}&resolved=false&ps=100") || issues_json='{}'
                   else
-                    issues_json=$(curl -fsS "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk${sonar_branch_qs}&inNewCodePeriod=true&resolved=false&ps=50") || issues_json='{}'
+                    issues_json=$(curl -fsS "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk${sonar_branch_qs}&resolved=false&ps=100") || issues_json='{}'
                   fi
-                  printf '%s' "${issues_json}" | python3 - <<'PY' || true
+                  ISSUES_JSON="${issues_json}" python3 - <<'PY' || true
 import json
-import sys
+import os
 
-try:
-    payload = json.loads(sys.stdin.read() or "{}")
-except json.JSONDecodeError:
-    print("Could not parse Sonar issues payload")
-    raise SystemExit(0)
-
+payload = json.loads(os.environ.get("ISSUES_JSON") or "{}")
 issues = payload.get("issues", [])
 if not issues:
-    print("No unresolved issues returned for new code period.")
-    raise SystemExit(0)
-
-for issue in issues:
-    component = issue.get("component", "")
-    path = component.split(":", 1)[-1] if ":" in component else component
-    line = issue.get("line", "?")
-    rule = issue.get("rule", "?")
-    severity = issue.get("severity", "?")
-    message = issue.get("message", "")
-    print(f"- [{severity}] {rule} at {path}:{line} :: {message}")
-PY
-            echo "---- SonarQube unresolved issues (fallback) ----"
-            if [ -n "${SONAR_AUTH_TOKEN:-}" ]; then
-            all_issues_json=$(curl -fsS -u "${SONAR_AUTH_TOKEN}:" "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk${sonar_branch_qs}&resolved=false&ps=100") || all_issues_json='{}'
-            else
-            all_issues_json=$(curl -fsS "${SONAR_HOST_URL}/api/issues/search?componentKeys=flowdesk${sonar_branch_qs}&resolved=false&ps=100") || all_issues_json='{}'
-            fi
-            ALL_ISSUES_JSON="${all_issues_json}" python3 - <<'PY' || true
-  import json
-  import os
-
-  issues_payload = json.loads(os.environ.get("ALL_ISSUES_JSON") or "{}")
-  issues = issues_payload.get("issues", [])
-  if issues:
-    for issue in issues[:20]:
-      component = issue.get("component", "")
-      path = component.split(":", 1)[-1] if ":" in component else component
-      line = issue.get("line", "?")
-      rule = issue.get("rule", "?")
-      severity = issue.get("severity", "?")
-      status = issue.get("status", "?")
-      message = issue.get("message", "")
-      print(f"- [{severity}/{status}] {rule} at {path}:{line} :: {message}")
+    print("No unresolved issues returned by Sonar.")
 else:
-    print("No unresolved issues returned by fallback query.")
-  PY
+    for issue in issues[:20]:
+        component = issue.get("component", "")
+        path = component.split(":", 1)[-1] if ":" in component else component
+        line = issue.get("line", "?")
+        rule = issue.get("rule", "?")
+        severity = issue.get("severity", "?")
+        status = issue.get("status", "?")
+        message = issue.get("message", "")
+        print(f"- [{severity}/{status}] {rule} at {path}:{line} :: {message}")
+PY
                   echo "---- End SonarQube quality gate details ----"
                 '''
               }
