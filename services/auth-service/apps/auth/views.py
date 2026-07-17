@@ -351,18 +351,30 @@ class SignatureStampUploadView(views.APIView):
     parser_classes = [MultiPartParser, FormParser]
     permission_classes = [permissions.IsAuthenticated]
 
+    def can_manage_stamp(self, user):
+        return getattr(user, "role", "") in {"approver", "admin"}
+
     def patch(self, request):
         user = request.user
+        update_fields = []
         if "signature_image" in request.FILES:
             if request.FILES["signature_image"].size > 200 * 1024:
                 return response.Response({"detail": "Signature must be under 200KB."},
                                          status=status.HTTP_400_BAD_REQUEST)
             user.signature_image = request.FILES["signature_image"]
+            update_fields.append("signature_image")
         if "stamp_image" in request.FILES:
+            if not self.can_manage_stamp(user):
+                return response.Response(
+                    {"detail": "Submitters cannot upload an official stamp."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             if request.FILES["stamp_image"].size > 200 * 1024:
                 return response.Response({"detail": "Stamp must be under 200KB."}, status=status.HTTP_400_BAD_REQUEST)
             user.stamp_image = request.FILES["stamp_image"]
-        user.save(update_fields=["signature_image", "stamp_image"])
+            update_fields.append("stamp_image")
+        if update_fields:
+            user.save(update_fields=update_fields)
         return response.Response(UserSerializer(user).data)
 
     def delete(self, request):
@@ -371,6 +383,11 @@ class SignatureStampUploadView(views.APIView):
         if field == "signature_image":
             user.signature_image = None
         elif field == "stamp_image":
+            if not self.can_manage_stamp(user):
+                return response.Response(
+                    {"detail": "Submitters cannot delete an official stamp."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
             user.stamp_image = None
         else:
             return response.Response({"detail": "field must be signature_image or stamp_image"},

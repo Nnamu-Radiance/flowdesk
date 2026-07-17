@@ -1,6 +1,16 @@
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework.test import APIClient
+
+
+def tiny_gif(name="asset.gif"):
+    img_data = (
+        b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff'
+        b'\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00'
+        b'\x01\x00\x01\x00\x00\x02\x02\x4c\x01\x00\x3b'
+    )
+    return SimpleUploadedFile(name, img_data, content_type="image/gif")
 
 
 @pytest.mark.django_db
@@ -243,32 +253,70 @@ def test_user_delete(django_user_model):
 
 
 @pytest.mark.django_db
-def test_signature_stamp_upload(django_user_model):
-    from django.core.files.uploadedfile import SimpleUploadedFile
+def test_submitter_can_upload_signature(django_user_model):
     user = django_user_model.objects.create_user(username="upload_user", role="submitter")
     client = APIClient()
     client.force_authenticate(user=user)
 
-    # Test upload - use a proper small GIF or PNG header
-    img_data = (
-        b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00\xff\xff\xff'
-        b'\x00\x00\x00\x21\xf9\x04\x01\x00\x00\x00\x00\x2c\x00\x00\x00\x00'
-        b'\x01\x00\x01\x00\x00\x02\x02\x4c\x01\x00\x3b'
-    )
-    sig_file = SimpleUploadedFile("sig.gif", img_data, content_type="image/gif")
-    
-    # We call it to get coverage, but ignore 400 for now if it happens in this environment
-    client.patch(
+    response = client.patch(
         reverse("signature-stamp-upload"),
-        {"signature_image": sig_file},
+        {"signature_image": tiny_gif("sig.gif")},
         format="multipart"
     )
-    
-    # Test delete
+
+    assert response.status_code == 200
+    user.refresh_from_db()
+    assert user.signature_image
+
     response = client.delete(reverse("signature-stamp-upload") + "?field=signature_image")
     assert response.status_code == 200
     user.refresh_from_db()
     assert not user.signature_image
+
+
+@pytest.mark.django_db
+def test_submitter_cannot_upload_or_delete_stamp(django_user_model):
+    user = django_user_model.objects.create_user(username="submitter_stamp", role="submitter")
+    user.stamp_image = "stamps/existing.gif"
+    user.save(update_fields=["stamp_image"])
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.patch(
+        reverse("signature-stamp-upload"),
+        {"stamp_image": tiny_gif("stamp.gif")},
+        format="multipart",
+    )
+
+    assert response.status_code == 403
+    assert response.data["detail"] == "Submitters cannot upload an official stamp."
+    user.refresh_from_db()
+    assert str(user.stamp_image) == "stamps/existing.gif"
+
+    response = client.delete(reverse("signature-stamp-upload") + "?field=stamp_image")
+
+    assert response.status_code == 403
+    assert response.data["detail"] == "Submitters cannot delete an official stamp."
+    user.refresh_from_db()
+    assert str(user.stamp_image) == "stamps/existing.gif"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("role", ["approver", "admin"])
+def test_approver_and_admin_can_upload_stamp(django_user_model, role):
+    user = django_user_model.objects.create_user(username=f"{role}_stamp", role=role)
+    client = APIClient()
+    client.force_authenticate(user=user)
+
+    response = client.patch(
+        reverse("signature-stamp-upload"),
+        {"stamp_image": tiny_gif("stamp.gif")},
+        format="multipart",
+    )
+
+    assert response.status_code == 200
+    user.refresh_from_db()
+    assert user.stamp_image
 
 
 @pytest.mark.django_db

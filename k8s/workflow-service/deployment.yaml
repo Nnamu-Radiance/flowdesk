@@ -21,9 +21,23 @@ spec:
         - name: workflow-service
           image: docker.io/flowdesk/workflow-service:latest
           imagePullPolicy: IfNotPresent
-          command: ["sh", "-c", "python -c 'import django; django.setup(); from django.db import connection; connection.cursor().execute(\"CREATE SCHEMA IF NOT EXISTS workflow_svc\")' && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:8002"]
+          command:
+            - sh
+            - -c
+          args:
+            - |
+              python -c 'import django; django.setup(); from django.db import connection; connection.cursor().execute("CREATE SCHEMA IF NOT EXISTS workflow_svc")' &&
+              python manage.py migrate &&
+              gunicorn config.wsgi:application --bind 0.0.0.0:8002 --workers 2 --timeout 120
           ports:
             - containerPort: 8002
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
           env:
             - name: DJANGO_SETTINGS_MODULE
               value: config.settings.production
@@ -66,23 +80,3 @@ spec:
             initialDelaySeconds: 60
             periodSeconds: 5
             failureThreshold: 5
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: workflow-service-hpa
-  namespace: flowdesk
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: workflow-service
-  minReplicas: 1
-  maxReplicas: 3
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
