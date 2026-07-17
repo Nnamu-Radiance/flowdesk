@@ -143,9 +143,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         qs = Workflow.objects.select_related("workflow_type").prefetch_related("documents").order_by("-created_at")
-        if self.request.headers.get("X-Internal-Service"):
-            pass
-        elif getattr(self.request.user, "role", "") != "admin":
+        if not self.request.headers.get("X-Internal-Service") and getattr(self.request.user, "role", "") != "admin":
             qs = qs.filter(created_by_id=self.request.user.id)
         status_filter = self.request.query_params.get("status")
         if status_filter:
