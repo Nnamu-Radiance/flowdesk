@@ -36,7 +36,6 @@ class CustomUser(AbstractUser):
     approver_type = models.CharField(
         max_length=30,
         choices=ApproverType.choices,
-        null=True,
         blank=True,
         db_index=True,
     )

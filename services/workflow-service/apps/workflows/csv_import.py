@@ -82,6 +82,61 @@ def form_fields_for(approval_chain: list[str], required_docs: list[str]) -> list
     return fields
 
 
+def parse_priority(value: str) -> int:
+    return int((value or "2").strip() or "2")
+
+
+def document_requirements_for(required_docs: list[str], all_documents_required: bool) -> list[dict]:
+    return [
+        {
+            "document_slug": slug,
+            "label": label_for_document_slug(slug),
+            "is_required": all_documents_required,
+        }
+        for slug in required_docs
+    ]
+
+
+def parse_workflow_config_row(row: dict, row_number: int) -> tuple[dict | None, list]:
+    name = (row.get("name") or "").strip()
+    if not name:
+        return None, [{"row": row_number, "error": "name is required"}]
+
+    metadata, metadata_errors = parse_metadata(row.get("metadata", ""), row_number)
+    if metadata_errors:
+        return None, metadata_errors
+
+    approval_chain = approval_chain_from_metadata(metadata)
+    if not approval_chain:
+        return None, [{"row": row_number, "error": "metadata must contain at least one stop_N field"}]
+
+    required_docs = parse_required_documents(str(metadata.get("required_documents", "")))
+    all_documents_required = bool(metadata.get("all_documents_required", True))
+    try:
+        priority = parse_priority(row.get("priority"))
+    except ValueError:
+        return None, [{"row": row_number, "error": "priority must be an integer"}]
+
+    return {
+        "name": name,
+        "approval_type": (row.get("approval_type") or "").strip(),
+        "description": (row.get("description") or "").strip(),
+        "department": str(metadata.get("department", "") or "").strip(),
+        "priority": priority,
+        "tags": split_tags(row.get("tags", "")),
+        "approval_chain": approval_chain,
+        "required_docs": required_docs,
+        "form_fields": form_fields_for(approval_chain, required_docs),
+        "all_documents_required": all_documents_required,
+        "expected_output": str(metadata.get("output", "") or "").strip(),
+        "sla_days": parse_sla_days(row.get("deadline", "")),
+        "is_active": True,
+        "metadata": metadata,
+        "approval_stops": approval_chain,
+        "document_requirements": document_requirements_for(required_docs, all_documents_required),
+    }, []
+
+
 def parse_workflow_config_csv(csv_text: str) -> CSVValidationResult:
     reader = csv.DictReader(StringIO(csv_text))
     headers = {header.strip() for header in (reader.fieldnames or [])}
@@ -94,56 +149,11 @@ def parse_workflow_config_csv(csv_text: str) -> CSVValidationResult:
 
     valid_rows = []
     for row_number, row in enumerate(reader, start=2):
-        name = (row.get("name") or "").strip()
-        if not name:
-            errors.append({"row": row_number, "error": "name is required"})
+        parsed_row, row_errors = parse_workflow_config_row(row, row_number)
+        if row_errors:
+            errors.extend(row_errors)
             continue
-
-        metadata, metadata_errors = parse_metadata(row.get("metadata", ""), row_number)
-        if metadata_errors:
-            errors.extend(metadata_errors)
-            continue
-
-        approval_chain = approval_chain_from_metadata(metadata)
-        if not approval_chain:
-            errors.append({"row": row_number, "error": "metadata must contain at least one stop_N field"})
-            continue
-
-        required_docs = parse_required_documents(str(metadata.get("required_documents", "")))
-        all_documents_required = bool(metadata.get("all_documents_required", True))
-        try:
-            priority = int((row.get("priority") or "2").strip() or "2")
-        except ValueError:
-            errors.append({"row": row_number, "error": "priority must be an integer"})
-            continue
-
-        valid_rows.append(
-            {
-                "name": name,
-                "approval_type": (row.get("approval_type") or "").strip(),
-                "description": (row.get("description") or "").strip(),
-                "department": str(metadata.get("department", "") or "").strip(),
-                "priority": priority,
-                "tags": split_tags(row.get("tags", "")),
-                "approval_chain": approval_chain,
-                "required_docs": required_docs,
-                "form_fields": form_fields_for(approval_chain, required_docs),
-                "all_documents_required": all_documents_required,
-                "expected_output": str(metadata.get("output", "") or "").strip(),
-                "sla_days": parse_sla_days(row.get("deadline", "")),
-                "is_active": True,
-                "metadata": metadata,
-                "approval_stops": approval_chain,
-                "document_requirements": [
-                    {
-                        "document_slug": slug,
-                        "label": label_for_document_slug(slug),
-                        "is_required": all_documents_required,
-                    }
-                    for slug in required_docs
-                ],
-            }
-        )
+        valid_rows.append(parsed_row)
 
     return CSVValidationResult(valid_rows=valid_rows, errors=errors)
 

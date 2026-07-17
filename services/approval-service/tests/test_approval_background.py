@@ -68,7 +68,6 @@ def test_handle_workflow_created_creates_default_chain_and_first_event():
     mock_publish.assert_called_once_with(
         "approval.requested",
         {"workflow_id": 321, "approver_id": 2},
-        "approval-service",
         correlation_id="corr-321",
     )
 
@@ -91,11 +90,10 @@ def test_decision_reject_marks_step_and_publishes_decision_only():
     assert status == "rejected"
     assert step.status == "rejected"
     mock_publish.assert_called_once()
-    event_name, payload, source = mock_publish.call_args.args
+    event_name, payload = mock_publish.call_args.args
     assert event_name == "approval.decision"
     assert payload["workflow_id"] == chain.workflow_id
     assert payload["decision"] == "rejected"
     assert payload["approver_id"] == 11
     assert payload["decided_at"]
-    assert source == "approval-service"
     assert mock_publish.call_args.kwargs["correlation_id"] == "corr-reject"

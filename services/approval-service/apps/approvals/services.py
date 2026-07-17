@@ -9,8 +9,7 @@ from apps.approvals.models import ApprovalChain, ApprovalRecord, ApprovalStep
 logger = logging.getLogger(__name__)
 
 
-def publish_event(event_type: str, payload: dict, source: str = "approval-service",
-                  correlation_id: str | None = None) -> dict:
+def publish_event(event_type: str, payload: dict, correlation_id: str | None = None) -> dict:
     return notify_event(event_type, payload, correlation_id=correlation_id)
 
 
@@ -19,7 +18,7 @@ def normalize_role(value: str) -> str:
 
 
 def display_role(value: str) -> str:
-    return " ".join(part for part in (value or "").replace("_", " ").split()).title()
+    return " ".join((value or "").replace("_", " ").split()).title()
 
 
 def cached_assignee_for(role: str, payload: dict) -> tuple[int | None, str]:
@@ -92,9 +91,8 @@ def resolve_approver(stop_role: str, supervisor_id: int = None, department: str 
         "is_active": "true",
     }
 
-    if approver_type in faculty_scoped:
-        if faculty:
-            params["faculty"] = faculty
+    if approver_type in faculty_scoped and faculty:
+        params["faculty"] = faculty
 
     try:
         response = requests.get(
@@ -130,61 +128,16 @@ class ApprovalService:
         payload = event.get("payload", {})
         workflow_id = payload["workflow_id"]
         approval_chain = payload.get("approval_chain") or ["approver", "approver"]
-
-        form_data = payload.get("form_data") or {}
-        student_department = payload.get("student_department") or form_data.get("department", "")
-        student_faculty = payload.get("student_faculty") or form_data.get("faculty", "")
-        supervisor_id = form_data.get("supervisor_id")
-
         deadline = dateparse.parse_datetime(payload["deadline"]) if payload.get("deadline") else None
         chain, _ = ApprovalChain.objects.update_or_create(
             workflow_id=workflow_id,
-            defaults={
-                "workflow_type_name": payload.get("workflow_type_name", ""),
-                "student_id": payload.get("student_id") or payload.get("created_by_id"),
-                "student_name": payload.get("student_name", ""),
-                "student_matricule": payload.get("student_matricule", ""),
-                "student_faculty": payload.get("student_faculty", ""),
-                "total_steps": len(approval_chain),
-                "current_step_number": 1,
-                "status": ApprovalChain.Status.ACTIVE,
-                "deadline": deadline,
-                "documents": payload.get("documents") or [],
-                "appeal_round": payload.get("appeal_round", 0),
-                "appeal_reason": payload.get("appeal_reason", ""),
-                "original_rejection_reason": payload.get("original_rejection_reason", ""),
-            },
+            defaults=approval_chain_defaults(payload, approval_chain, deadline),
         )
         chain.steps.all().delete()
 
         first_step = None
         for index, role in enumerate(approval_chain, start=1):
-            assignee_id = None
-            assignee_name = ""
-            try:
-                assignee_id = resolve_approver(
-                    stop_role=role,
-                    supervisor_id=int(supervisor_id) if supervisor_id else None,
-                    department=student_department,
-                    faculty=student_faculty,
-                )
-            except Exception as exc:
-                logger.warning(
-                    "resolve_approver failed for role '%s': %s; step will have no assignee",
-                    role,
-                    exc,
-                )
-                assignee_id, assignee_name = cached_assignee_for(role, payload)
-
-            step = ApprovalStep.objects.create(
-                chain=chain,
-                step_number=index,
-                role_required=normalize_role(role),
-                role_display_name=display_role(role),
-                assignee_id=assignee_id or index + 1,
-                assignee_name=assignee_name,
-                status=ApprovalStep.Status.ACTIVE if index == 1 else ApprovalStep.Status.PENDING,
-            )
+            step = create_approval_step(chain, index, role, payload)
             if index == 1:
                 first_step = step
         if first_step and first_step.assignee_id:
@@ -196,7 +149,6 @@ class ApprovalService:
         return publish_event(
             "approval.requested",
             {"workflow_id": chain.workflow_id, "approver_id": step.assignee_id},
-            "approval-service",
             correlation_id=correlation_id,
         )
 
@@ -277,7 +229,6 @@ class ApprovalService:
                         "step_number": next_step.step_number,
                         "total_steps": chain.total_steps,
                     },
-                    "approval-service",
                     correlation_id=correlation_id,
                 )
                 if next_step.assignee_id:
@@ -299,7 +250,6 @@ class ApprovalService:
                     "final_comments": comments,
                     "send_feedback_to_student": send_feedback_to_student,
                 },
-                "approval-service",
                 correlation_id=correlation_id,
             )
             return "approved"
@@ -323,7 +273,6 @@ class ApprovalService:
                     "final_comments": comments,
                     "send_feedback_to_student": send_feedback_to_student,
                 },
-                "approval-service",
                 correlation_id=correlation_id,
             )
             return "rejected"
@@ -344,7 +293,6 @@ class ApprovalService:
                 "annotated_document_url": record.annotated_document.url if record.annotated_document else "",
                 "send_feedback_to_student": send_feedback_to_student,
             },
-            "approval-service",
             correlation_id=correlation_id,
         )
         return "returned"
@@ -378,3 +326,60 @@ class ApprovalService:
         )
         ApprovalService.publish_requested(chain, step, correlation_id)
         return {"old_assignee_id": old_assignee_id, "new_assignee_id": new_assignee_id}
+
+
+def approval_chain_defaults(payload: dict, approval_chain: list[str], deadline):
+    return {
+        "workflow_type_name": payload.get("workflow_type_name", ""),
+        "student_id": payload.get("student_id") or payload.get("created_by_id"),
+        "student_name": payload.get("student_name", ""),
+        "student_matricule": payload.get("student_matricule", ""),
+        "student_faculty": payload.get("student_faculty", ""),
+        "total_steps": len(approval_chain),
+        "current_step_number": 1,
+        "status": ApprovalChain.Status.ACTIVE,
+        "deadline": deadline,
+        "documents": payload.get("documents") or [],
+        "appeal_round": payload.get("appeal_round", 0),
+        "appeal_reason": payload.get("appeal_reason", ""),
+        "original_rejection_reason": payload.get("original_rejection_reason", ""),
+    }
+
+
+def workflow_scope(payload: dict) -> tuple[str, str, int | None]:
+    form_data = payload.get("form_data") or {}
+    student_department = payload.get("student_department") or form_data.get("department", "")
+    student_faculty = payload.get("student_faculty") or form_data.get("faculty", "")
+    supervisor_id = form_data.get("supervisor_id")
+    return student_department, student_faculty, int(supervisor_id) if supervisor_id else None
+
+
+def resolved_assignee(role: str, payload: dict) -> tuple[int | None, str]:
+    student_department, student_faculty, supervisor_id = workflow_scope(payload)
+    try:
+        return resolve_approver(
+            stop_role=role,
+            supervisor_id=supervisor_id,
+            department=student_department,
+            faculty=student_faculty,
+        ), ""
+    except Exception as exc:
+        logger.warning(
+            "resolve_approver failed for role '%s': %s; step will have no assignee",
+            role,
+            exc,
+        )
+        return cached_assignee_for(role, payload)
+
+
+def create_approval_step(chain: ApprovalChain, index: int, role: str, payload: dict) -> ApprovalStep:
+    assignee_id, assignee_name = resolved_assignee(role, payload)
+    return ApprovalStep.objects.create(
+        chain=chain,
+        step_number=index,
+        role_required=normalize_role(role),
+        role_display_name=display_role(role),
+        assignee_id=assignee_id or index + 1,
+        assignee_name=assignee_name,
+        status=ApprovalStep.Status.ACTIVE if index == 1 else ApprovalStep.Status.PENDING,
+    )

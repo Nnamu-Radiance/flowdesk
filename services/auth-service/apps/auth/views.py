@@ -1,7 +1,7 @@
 import json
 import hashlib
 import secrets
-from urllib.error import HTTPError, URLError
+from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -252,7 +252,7 @@ class GoogleOAuthCallbackView(APIView):
         try:
             with urlopen(request, timeout=10) as res:
                 return json.loads(res.read().decode("utf-8"))
-        except (HTTPError, URLError) as exc:
+        except URLError as exc:
             raise ValueError("Google token exchange failed.") from exc
 
     def fetch_google_user(self, access_token):
@@ -264,7 +264,7 @@ class GoogleOAuthCallbackView(APIView):
         try:
             with urlopen(request, timeout=10) as res:
                 return json.loads(res.read().decode("utf-8"))
-        except (HTTPError, URLError) as exc:
+        except URLError as exc:
             raise ValueError("Google profile lookup failed.") from exc
 
 
@@ -415,7 +415,7 @@ class UserRoleUpdateView(APIView):
         new_approver_type = serializer.validated_data.get("approver_type") or ""
 
         user.role = new_role
-        user.approver_type = new_approver_type if new_role == "approver" else None
+        user.approver_type = new_approver_type if new_role == "approver" else ""
         user.save(update_fields=["role", "approver_type"])
 
         RoleChangeLog.objects.create(
