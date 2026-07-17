@@ -16,5 +16,9 @@ class JWTLocalAuthentication(authentication.BaseAuthentication):
         except Exception as exc:
             raise exceptions.AuthenticationFailed("Invalid JWT") from exc
 
-        user = ServiceUser(payload.get("user_id") or payload.get("id"), payload.get("role", "submitter"))
+        user = ServiceUser(
+            payload.get("user_id") or payload.get("id"),
+            payload.get("role", "submitter"),
+            payload.get("approver_type", ""),
+        )
         return user, payload

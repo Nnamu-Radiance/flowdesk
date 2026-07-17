@@ -9,24 +9,55 @@ from apps.approvals.serializers import ApprovalChainSerializer, ApprovalRecordSe
 from apps.approvals.services import ApprovalService
 
 APPROVAL_CHAIN_NOT_FOUND = "Approval chain not found"
+INSTITUTIONAL_APPROVER_ROLES = {
+    "admin_assistant",
+    "administrative_assistant",
+    "dean",
+    "deputy_vice_chancellor",
+    "dvc",
+    "faculty",
+    "faculty_council",
+    "faculty_scientific_council",
+    "head_of_department",
+    "hod",
+    "registrar",
+    "supervisor",
+}
+
+
+def normalized_role(value: str) -> str:
+    return (value or "").strip().lower().replace(" ", "_").replace("/", "_")
+
+
+def user_role_values(request) -> set[str]:
+    auth = request.auth if isinstance(request.auth, dict) else {}
+    return {
+        normalized_role(value)
+        for value in {
+            getattr(request.user, "role", ""),
+            getattr(request.user, "approver_type", ""),
+            auth.get("role", ""),
+            auth.get("approver_type", ""),
+        }
+        if value
+    }
+
+
+def is_approver_user(request) -> bool:
+    if not request.user or not request.user.is_authenticated:
+        return False
+    roles = user_role_values(request)
+    return bool(roles & ({"admin", "approver"} | INSTITUTIONAL_APPROVER_ROLES))
 
 
 class IsApprover(permissions.BasePermission):
     def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and getattr(request.user, "role", "") in {"HOD", "Dean", "admin", "approver"}
-        )
+        return is_approver_user(request)
 
 
 class IsAdminOrApprover(permissions.BasePermission):
     def has_permission(self, request, view):
-        return bool(
-            request.user
-            and request.user.is_authenticated
-            and getattr(request.user, "role", "") in {"HOD", "Dean", "admin", "approver"}
-        )
+        return is_approver_user(request)
 
 
 def active_assigned_chain(workflow_id: int, user_id: int):
@@ -187,9 +218,7 @@ class HistoryView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, workflow_id: int):
-        role = getattr(request.user, "role", "")
-        is_privileged = role in {"admin", "approver", "HOD", "Dean"}
-        if not is_privileged:
+        if not is_approver_user(request):
             chain = ApprovalChain.objects.filter(workflow_id=workflow_id).first()
             if not chain or chain.student_id != request.user.id:
                 return response.Response(

@@ -38,6 +38,43 @@ def test_pending_approvals(api_client):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("role", ["registrar", "hod", "dean", "admin_assistant", "faculty_council", "dvc", "supervisor"])
+def test_pending_approvals_allows_institutional_approver_roles(role):
+    from apps.approvals.service_user import ServiceUser
+
+    client = APIClient()
+    client.force_authenticate(user=ServiceUser(user_id=7, role=role))
+    chain = ApprovalChain.objects.create(workflow_id=701, name="Institutional Chain")
+    ApprovalStep.objects.create(chain=chain, order=1, approver_id=7, status=ApprovalStep.Status.ACTIVE)
+
+    response = client.get("/api/approvals/pending/")
+
+    assert response.status_code == 200
+    assert response.data[0]["workflow_id"] == 701
+
+
+@pytest.mark.django_db
+def test_pending_approvals_allows_approver_type_claim_when_role_is_generic():
+    from apps.approvals.service_user import ServiceUser
+    from apps.approvals.views import IsApprover
+
+    client = APIClient()
+    user = ServiceUser(user_id=8, role="user", approver_type="registrar")
+    client.force_authenticate(user=user)
+    chain = ApprovalChain.objects.create(workflow_id=702, name="Registrar Chain")
+    ApprovalStep.objects.create(chain=chain, order=1, approver_id=8, status=ApprovalStep.Status.ACTIVE)
+
+    response = client.get("/api/approvals/pending/")
+
+    assert response.status_code == 200
+    assert response.data[0]["workflow_id"] == 702
+    request = APIRequestFactory().get("/api/approvals/pending/")
+    request.user = user
+    request.auth = {"role": "user", "approver_type": "registrar"}
+    assert IsApprover().has_permission(request, None) is True
+
+
+@pytest.mark.django_db
 def test_approval_decision(api_client):
     chain = ApprovalChain.objects.create(workflow_id=101, name="Chain 1")
     ApprovalStep.objects.create(chain=chain, order=1, approver_id=1, status="pending")
@@ -169,6 +206,21 @@ def test_history_endpoint(api_client):
     response = api_client.get("/api/approvals/110/history/")
     assert response.status_code == 200
     assert response.data == []
+
+
+@pytest.mark.django_db
+def test_history_endpoint_allows_registrar_role():
+    from apps.approvals.service_user import ServiceUser
+
+    client = APIClient()
+    client.force_authenticate(user=ServiceUser(user_id=321, role="registrar"))
+    ApprovalChain.objects.create(workflow_id=710, student_id=999)
+    ApprovalRecord.objects.create(workflow_id=710, step_number=1, actor_id=321, action=ApprovalRecord.Action.APPROVED)
+
+    response = client.get("/api/approvals/710/history/")
+
+    assert response.status_code == 200
+    assert response.data[0]["workflow_id"] == 710
 
 
 @pytest.mark.django_db
@@ -306,11 +358,15 @@ def test_jwt_authentication_accepts_bearer_token():
     from apps.approvals.authentication import JWTLocalAuthentication
 
     request = APIRequestFactory().get("/api/approvals/pending/", HTTP_AUTHORIZATION="Bearer good-token")
-    with patch("apps.approvals.authentication.validate_jwt", return_value={"user_id": 44, "role": "approver"}):
+    with patch(
+        "apps.approvals.authentication.validate_jwt",
+        return_value={"user_id": 44, "role": "approver", "approver_type": "registrar"},
+    ):
         user, payload = JWTLocalAuthentication().authenticate(request)
 
     assert user.id == 44
     assert user.role == "approver"
+    assert user.approver_type == "registrar"
     assert payload["user_id"] == 44
 
 
