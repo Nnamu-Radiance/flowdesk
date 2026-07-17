@@ -2,8 +2,11 @@ import logging
 import uuid
 
 from celery import current_app
+from celery.exceptions import CeleryError
 from django.db import transaction
 from django.utils import timezone
+from kombu.exceptions import KombuError
+from redis.exceptions import RedisError
 
 from apps.workflows.models import Document, Workflow
 from apps.workflows.events import publish_workflow_created
@@ -87,14 +90,14 @@ class WorkflowService:
                     args=[event],
                     queue="approval",
                 )
-            except Exception:
+            except (CeleryError, KombuError, OSError):
                 logger.exception("workflow_created approval task dispatch failed workflow_id=%s", workflow.id)
 
         transaction.on_commit(trigger_chain)
 
         try:
             publish_workflow_created(workflow, correlation_id or "")
-        except Exception:
+        except (RedisError, OSError):
             logger.exception("Best-effort workflow.created Pub/Sub publish failed for workflow_id=%s", workflow.id)
 
     @staticmethod

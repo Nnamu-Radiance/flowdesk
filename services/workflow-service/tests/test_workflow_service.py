@@ -53,12 +53,14 @@ def test_workflow_crud(api_client, django_user_model):
 
 @pytest.mark.django_db
 def test_workflow_create_survives_document_task_dispatch_failure(api_client):
+    from kombu.exceptions import OperationalError
+
     from apps.workflows.models import WorkflowType
 
     workflow_type = WorkflowType.objects.create(name="Permit", approval_chain=["dean"])
 
     with (
-        patch("apps.workflows.views.process_document.delay", side_effect=RuntimeError("broker down")),
+        patch("apps.workflows.views.process_document.delay", side_effect=OperationalError("broker down")),
         patch("apps.workflows.views.WorkflowService.dispatch_workflow_created") as mock_dispatch,
     ):
         response = api_client.post("/api/workflows/", {"workflow_type_id": workflow_type.id}, format="json")
@@ -71,6 +73,9 @@ def test_workflow_create_survives_document_task_dispatch_failure(api_client):
 
 @pytest.mark.django_db
 def test_workflow_created_dispatch_logs_async_failures(django_capture_on_commit_callbacks):
+    from kombu.exceptions import OperationalError
+    from redis.exceptions import RedisError
+
     from apps.workflows.models import WorkflowType
     from apps.workflows.services import WorkflowService
 
@@ -78,8 +83,8 @@ def test_workflow_created_dispatch_logs_async_failures(django_capture_on_commit_
     workflow = Workflow.objects.create(name="Permit", workflow_type=workflow_type, created_by_id=1)
 
     with (
-        patch("apps.workflows.services.current_app.send_task", side_effect=RuntimeError("broker down")) as mock_send,
-        patch("apps.workflows.services.publish_workflow_created", side_effect=RuntimeError("pubsub down")) as mock_publish,
+        patch("apps.workflows.services.current_app.send_task", side_effect=OperationalError("broker down")) as mock_send,
+        patch("apps.workflows.services.publish_workflow_created", side_effect=RedisError("pubsub down")) as mock_publish,
         django_capture_on_commit_callbacks(execute=True),
     ):
         WorkflowService.dispatch_workflow_created(workflow, "corr-1")

@@ -3,9 +3,11 @@ import logging
 import uuid
 from datetime import timedelta
 
+from celery.exceptions import CeleryError
 from django.core.cache import cache
 from django.db import connection, transaction
 from django.utils import timezone
+from kombu.exceptions import KombuError
 from rest_framework import permissions, response, status, views, viewsets
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
@@ -274,7 +276,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
         try:
             process_document.delay(workflow.id)
-        except Exception:
+        except (CeleryError, KombuError, OSError):
             logger.exception("workflow document task dispatch failed workflow_id=%s", workflow.id)
         WorkflowService.dispatch_workflow_created(
             workflow,
