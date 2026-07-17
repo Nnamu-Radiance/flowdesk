@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from datetime import timedelta
 
@@ -31,6 +32,8 @@ WORKFLOW_TYPE_FIELDS = {
     "sla_days",
     "is_active",
 }
+
+logger = logging.getLogger(__name__)
 
 
 class IsAdmin(permissions.BasePermission):
@@ -174,6 +177,18 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
+        try:
+            return self._create(request, *args, **kwargs)
+        except Exception:
+            logger.exception(
+                "workflow create failed user_id=%s workflow_type_id=%s correlation_id=%s",
+                getattr(request.user, "id", None),
+                request.data.get("workflow_type_id") or request.data.get("workflow_type"),
+                getattr(request, "correlation_id", None),
+            )
+            raise
+
+    def _create(self, request, *args, **kwargs):
         workflow_type_id = request.data.get("workflow_type_id") or request.data.get("workflow_type")
         if not workflow_type_id:
             return response.Response({"detail": "workflow_type_id is required"}, status=status.HTTP_400_BAD_REQUEST)

@@ -81,11 +81,14 @@ class WorkflowService:
         event = WorkflowService.workflow_created_event(workflow, correlation_id)
 
         def trigger_chain():
-            current_app.send_task(
-                "apps.approvals.tasks.consume_workflow_created",
-                args=[event],
-                queue="approval",
-            )
+            try:
+                current_app.send_task(
+                    "apps.approvals.tasks.consume_workflow_created",
+                    args=[event],
+                    queue="approval",
+                )
+            except Exception:
+                logger.exception("workflow_created approval task dispatch failed workflow_id=%s", workflow.id)
 
         transaction.on_commit(trigger_chain)
 
