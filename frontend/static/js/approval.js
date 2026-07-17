@@ -5,21 +5,24 @@ class ApprovalPage {
     this.items = [];
     this.activeFilter = 'all';
     this.viewer = null;
+    this.approverType = FlowDeskShell.approverTypeOf(user);
+    this.tabs = this.tabsForUser();
   }
 
   async init() {
+    const tabsMarkup = this.tabs.length > 1
+      ? `<div id="approval-tabs" style="display:flex;gap:6px">${this.tabs.map((tab) => `<button class="btn btn-sm btn-secondary" data-tab="${tab.value}" type="button">${tab.label}</button>`).join('')}</div>`
+      : '';
     this.root.innerHTML = `
       <section class="card">
         <div class="card-hd">
           <h2 class="card-title">Pending approvals</h2>
-          <div id="approval-tabs" style="display:flex;gap:6px">
-            ${['All', 'Academic', 'Finance', 'Administrative'].map((tab) => `<button class="btn btn-sm btn-secondary" data-tab="${tab.toLowerCase()}" type="button">${tab}</button>`).join('')}
-          </div>
+          ${tabsMarkup}
         </div>
         <div id="approval-list">Loading approvals...</div>
       </section>
     `;
-    document.getElementById('approval-tabs').addEventListener('click', (event) => {
+    document.getElementById('approval-tabs')?.addEventListener('click', (event) => {
       const button = event.target.closest('[data-tab]');
       if (!button) return;
       this.activeFilter = button.dataset.tab;
@@ -27,6 +30,18 @@ class ApprovalPage {
     });
     FlowDeskShell.onLive('approval.requested', () => this.load());
     await this.load();
+  }
+
+  tabsForUser() {
+    if (FlowDeskShell.roleOf(this.user) === 'admin' || this.approverType === 'registrar') {
+      return [
+        { label: 'All', value: 'all' },
+        { label: 'Academic', value: 'academic' },
+        { label: 'Finance', value: 'finance' },
+        { label: 'Administrative', value: 'administrative' },
+      ];
+    }
+    return [{ label: 'All', value: 'all' }];
   }
 
   async load() {
@@ -37,7 +52,16 @@ class ApprovalPage {
 
   filtered() {
     if (this.activeFilter === 'all') return this.items;
-    return this.items.filter((item) => String(item.workflow_type || item.workflow_type_name || '').toLowerCase().includes(this.activeFilter));
+    return this.items.filter((item) => {
+      const haystack = [
+        item.workflow_type,
+        item.workflow_type_name,
+        item.name,
+        item.approval_type,
+        ...(Array.isArray(item.tags) ? item.tags : []),
+      ].join(' ').toLowerCase();
+      return haystack.includes(this.activeFilter);
+    });
   }
 
   render() {
@@ -217,15 +241,24 @@ class ApprovalPage {
 
   async reassignModal(workflowId) {
     const users = FlowDeskShell.results(await AuthAPI.users().catch(() => []))
-      .filter((user) => user.role === this.user.role && user.id !== this.user.id);
+      .filter((user) => {
+        if (user.id === this.user.id) return false;
+        if (FlowDeskShell.roleOf(user) !== 'approver') return false;
+        return !this.approverType || FlowDeskShell.approverTypeOf(user) === this.approverType;
+      });
     const modal = this.modal('Reassign approval', `
       <div class="form-group"><label class="form-label">Approver</label><select id="reassign-user" class="form-select">${users.map((user) => `<option value="${user.id}">${FlowDeskShell.esc(FlowDeskShell.fullName(user))}</option>`).join('')}</select></div>
       <div class="form-group"><label class="form-label">Note</label><textarea id="reassign-note" class="form-input" rows="3"></textarea></div>
     `, `<button class="btn btn-primary btn-sm" id="reassign-submit" type="button">Reassign</button>`);
     modal.querySelector('#reassign-submit').addEventListener('click', async () => {
       try {
+        const newAssigneeId = modal.querySelector('#reassign-user').value;
+        if (!newAssigneeId) {
+          showToast('No matching approver is available for reassignment.', 'error');
+          return;
+        }
         await api.post(`/api/approvals/${workflowId}/reassign/`, {
-          new_assignee_id: modal.querySelector('#reassign-user').value,
+          new_assignee_id: newAssigneeId,
           reason: modal.querySelector('#reassign-note').value,
         });
         showToast('Approval reassigned.', 'success');
@@ -266,7 +299,12 @@ class ApprovalPage {
 
 document.addEventListener('DOMContentLoaded', async () => {
   try {
-    const { user, root } = await FlowDeskShell.initPage({ activePage: 'approvals', title: 'Pending approvals', allowedRoles: ['approver', 'admin'], options: { hideNewRequest: true } });
+    const { user, root } = await FlowDeskShell.initPage({
+      activePage: 'approvals',
+      title: 'Pending approvals',
+      allowedRoles: ['approver', 'admin', 'registrar', 'hod', 'dean', 'admin_assistant', 'faculty_council', 'dvc', 'supervisor'],
+      options: { hideNewRequest: true },
+    });
     await new ApprovalPage(user, root).init();
   } catch (error) {
     if (error.message !== 'Not authenticated' && error.message !== 'Access denied') showToast(`Failed to load approvals: ${error.message}`, 'error');

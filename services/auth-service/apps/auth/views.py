@@ -20,7 +20,7 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.views import TokenObtainPairView
 
 from apps.auth.models import RoleChangeLog
-from apps.auth.permissions import IsAdmin
+from apps.auth.permissions import IsAdmin, user_is_approver
 from apps.auth.serializers import (
     AdminUserUpdateSerializer,
     CreateUserSerializer,
@@ -352,7 +352,7 @@ class SignatureStampUploadView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def can_manage_stamp(self, user):
-        return getattr(user, "role", "") in {"approver", "admin"}
+        return user_is_approver(user)
 
     def patch(self, request):
         user = request.user

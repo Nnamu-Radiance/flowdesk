@@ -28,11 +28,35 @@ const FlowDeskShell = (() => {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
+  const institutionalApproverTypes = new Set([
+    'admin_assistant',
+    'administrative_assistant',
+    'dean',
+    'deputy_vice_chancellor',
+    'dvc',
+    'faculty_council',
+    'faculty_scientific_council',
+    'head_of_department',
+    'hod',
+    'registrar',
+    'supervisor',
+  ]);
+  const normalizeRole = (value) => String(value || '').trim().toLowerCase().replace(/[\s/-]+/g, '_');
   const titleCase = (value) => String(value || '')
     .replace(/[_-]/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
 
-  const roleOf = (user) => user?.role || user?.role_type || AuthManager.getUserRole() || 'submitter';
+  const approverTypeOf = (user) => {
+    const type = normalizeRole(user?.approver_type || AuthManager.getApproverType());
+    if (type) return type;
+    const role = normalizeRole(user?.role || user?.role_type || AuthManager.getUserRole());
+    return institutionalApproverTypes.has(role) ? role : '';
+  };
+  const roleOf = (user) => {
+    const role = normalizeRole(user?.role || user?.role_type || AuthManager.getUserRole());
+    if (institutionalApproverTypes.has(role)) return 'approver';
+    return role || 'submitter';
+  };
   const fullName = (user) => user?.full_name || [user?.first_name, user?.last_name].filter(Boolean).join(' ') || user?.username || user?.email || 'FlowDesk user';
   const initials = (user) => fullName(user).split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'F';
   const results = (payload) => payload?.results || payload || [];
@@ -125,7 +149,8 @@ const FlowDeskShell = (() => {
 
   function roleAllowed(user, allowedRoles) {
     if (!allowedRoles || !allowedRoles.length) return true;
-    return allowedRoles.includes(roleOf(user));
+    const allowed = allowedRoles.map(normalizeRole);
+    return allowed.includes(roleOf(user)) || allowed.includes(approverTypeOf(user));
   }
 
   function notificationIcon(type, payload = {}) {
@@ -292,8 +317,8 @@ const FlowDeskShell = (() => {
       window.location.href = loginUrl;
       throw new Error('Not authenticated');
     }
-    const tokenRole = AuthManager.getUserRole();
-    if (allowedRoles?.length && tokenRole && !allowedRoles.includes(tokenRole)) {
+    const tokenUser = { role: AuthManager.getUserRole(), approver_type: AuthManager.getApproverType() };
+    if (allowedRoles?.length && tokenUser.role && !roleAllowed(tokenUser, allowedRoles)) {
       window.location.href = dashboardUrl;
       throw new Error('Access denied');
     }
@@ -313,7 +338,9 @@ const FlowDeskShell = (() => {
   return {
     esc,
     titleCase,
+    normalizeRole,
     roleOf,
+    approverTypeOf,
     fullName,
     initials,
     results,

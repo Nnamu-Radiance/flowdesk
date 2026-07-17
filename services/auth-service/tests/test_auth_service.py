@@ -185,6 +185,8 @@ def test_permissions():
 
     admin = type("User", (), {"is_authenticated": True, "role": "admin"})
     approver = type("User", (), {"is_authenticated": True, "role": "approver"})
+    hod = type("User", (), {"is_authenticated": True, "role": "hod", "approver_type": ""})
+    registrar = type("User", (), {"is_authenticated": True, "role": "user", "approver_type": "registrar"})
     submitter = type("User", (), {"is_authenticated": True, "role": "submitter"})
     anon = type("User", (), {"is_authenticated": False, "role": "guest"})
 
@@ -198,6 +200,8 @@ def test_permissions():
     p = IsApprover()
     assert p.has_permission(type("Req", (), {"user": admin}), None) is True
     assert p.has_permission(type("Req", (), {"user": approver}), None) is True
+    assert p.has_permission(type("Req", (), {"user": hod}), None) is True
+    assert p.has_permission(type("Req", (), {"user": registrar}), None) is True
     assert p.has_permission(type("Req", (), {"user": submitter}), None) is False
 
     # IsSubmitter
