@@ -177,16 +177,7 @@ class WorkflowViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
-        try:
-            return self._create(request, *args, **kwargs)
-        except Exception:
-            logger.exception(
-                "workflow create failed user_id=%s workflow_type_id=%s correlation_id=%s",
-                getattr(request.user, "id", None),
-                request.data.get("workflow_type_id") or request.data.get("workflow_type"),
-                getattr(request, "correlation_id", None),
-            )
-            raise
+        return self._create(request, *args, **kwargs)
 
     def _create(self, request, *args, **kwargs):
         workflow_type_id = request.data.get("workflow_type_id") or request.data.get("workflow_type")
