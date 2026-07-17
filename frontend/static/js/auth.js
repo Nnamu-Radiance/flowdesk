@@ -83,6 +83,10 @@ const AuthManager = (() => {
       return currentUser?.role || currentUser?.role_type || decodeTokenPayload(accessToken).role || '';
     },
 
+    getApproverType() {
+      return currentUser?.approver_type || decodeTokenPayload(accessToken).approver_type || '';
+    },
+
     isAdmin() {
       return this.getUserRole() === 'admin';
     },
