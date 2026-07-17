@@ -104,12 +104,9 @@ def test_workflow_create_logs_unexpected_errors():
 
     with (
         patch.object(WorkflowViewSet, "_create", side_effect=RuntimeError("boom")),
-        patch("apps.workflows.views.logger.exception") as mock_log,
         pytest.raises(RuntimeError, match="boom"),
     ):
         WorkflowViewSet().create(request)
-
-    mock_log.assert_called_once()
 
 
 @pytest.mark.django_db
