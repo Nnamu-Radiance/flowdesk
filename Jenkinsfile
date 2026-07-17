@@ -176,6 +176,18 @@ pipeline {
             echo "SonarQube quality gate status: ${qualityGate.status}"
             if (qualityGate.status != 'OK') {
               currentBuild.result = 'UNSTABLE'
+              withSonarQubeEnv('sonarqube') {
+                sh '''
+                  set +x
+                  echo "---- SonarQube quality gate details ----"
+                  if [ -n "${SONAR_AUTH_TOKEN:-}" ]; then
+                    curl -fsS -u "${SONAR_AUTH_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=flowdesk" | python3 -m json.tool || true
+                  else
+                    curl -fsS "${SONAR_HOST_URL}/api/qualitygates/project_status?projectKey=flowdesk" | python3 -m json.tool || true
+                  fi
+                  echo "---- End SonarQube quality gate details ----"
+                '''
+              }
               if (params.ENFORCE_QUALITY_GATE) {
                 error "Pipeline aborted due to quality gate failure: ${qualityGate.status}"
               }
