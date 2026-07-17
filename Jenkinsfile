@@ -453,6 +453,40 @@ pipeline {
           curl -fsS -H "Host: ${host_header}" "${base_url}/health/approval/"
           curl -fsS -H "Host: ${host_header}" "${base_url}/health/notification/"
           curl -fsS -H "Host: ${host_header}" "${base_url}/health/analytics/"
+
+          smoke_type_id=$(kubectl -n flowdesk exec deployment/workflow-service -- python manage.py shell -c "from apps.workflows.models import WorkflowType; wt, _ = WorkflowType.objects.update_or_create(name='Smoke Test Workflow', defaults={'approval_chain': [], 'required_docs': [], 'form_fields': [], 'all_documents_required': False, 'is_active': True, 'description': 'CI smoke test workflow'}); print(wt.id)" | tail -1 | tr -d '\\r')
+          token=$(kubectl -n flowdesk exec -i deployment/workflow-service -- python - <<'PY'
+import datetime
+import os
+import uuid
+
+import jwt
+
+now = datetime.datetime.now(datetime.UTC)
+payload = {
+    "token_type": "access",
+    "exp": now + datetime.timedelta(minutes=10),
+    "iat": now,
+    "jti": uuid.uuid4().hex,
+    "user_id": 999999,
+    "role": "submitter",
+    "full_name": "CI Smoke Submitter",
+    "matricule": "CI-SMOKE",
+    "faculty": "CI",
+    "department": "CI",
+}
+print(jwt.encode(payload, os.environ["JWT_SECRET_KEY"], algorithm="HS256"))
+PY
+)
+          response_file=$(mktemp)
+          status_code=$(curl -sS -o "${response_file}" -w "%{http_code}" \
+            -H "Host: ${host_header}" \
+            -H "Authorization: Bearer ${token}" \
+            -H "Content-Type: application/json" \
+            --data "{\"workflow_type_id\": ${smoke_type_id}, \"form_data\": {}}" \
+            "${base_url}/api/workflows/")
+          cat "${response_file}"
+          test "${status_code}" = "201"
         '''
       }
     }
