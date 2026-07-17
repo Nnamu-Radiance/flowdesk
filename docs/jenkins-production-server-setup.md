@@ -49,7 +49,7 @@ For Docker Hub, the username in `DOCKER_CREDENTIALS` must be able to push to the
 In `Build with Parameters`, set:
 
 1. `LOCAL_ONLY=false`
-2. `PUSH_TO_REGISTRY=false` for same-server deploys that use locally built images
+2. `PUSH_TO_REGISTRY=false` for same-server deploys that import locally built images into k3s/containerd
 3. `PUSH_TO_REGISTRY=true` only when Kubernetes needs to pull images from Docker Hub or another registry
 
 This enables build/deploy/smoke stages. The push stage runs only when `PUSH_TO_REGISTRY=true`.
@@ -77,9 +77,21 @@ Current image naming format:
 1. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:${IMAGE_TAG}`
 2. `${REGISTRY}/${IMAGE_NAMESPACE}/${service}:latest`
 
-For same-server deployment without Docker Hub, Jenkins still builds these image names locally, then imports them into the Kubernetes runtime before deployment. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`. If pods enter `ImagePullBackOff`, the import step did not run successfully; either fix runtime image import access or enable `PUSH_TO_REGISTRY=true`.
+For same-server deployment without Docker Hub, Jenkins builds these image names locally, then imports them into the Kubernetes runtime before deployment. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`. If the Kubernetes image import preflight fails, fix runtime image import access before rerunning with `PUSH_TO_REGISTRY=false`.
 
 When the k3s containerd socket is mounted as `root:root` with mode `660`, the Jenkins job user must be in group `0` or the import command fails with `permission denied`.
+
+After restarting k3s on the host, confirm both the host and Jenkins container can reach the live containerd socket:
+
+```bash
+sudo systemctl restart k3s
+sudo k3s ctr -n k8s.io images ls
+cd /var/www/flowdesk
+docker compose up -d --force-recreate --no-deps jenkins
+docker exec flowdesk-jenkins k3s ctr -n k8s.io images ls
+```
+
+The final command must list images from inside `flowdesk-jenkins`; otherwise Jenkins is still seeing a stale or unreachable containerd socket. If the host command works but the container command fails, recreate Jenkins after the k3s restart so Docker remounts the live `/run/k3s/containerd` directory.
 
 If rebuilding the Jenkins image fails because the server cannot resolve package repositories such as `deb.debian.org`, you can still apply the permission fix to the existing Jenkins image:
 
@@ -133,6 +145,7 @@ docker compose up -d --build --force-recreate --no-deps jenkins
 docker exec flowdesk-jenkins env | grep KUBECONFIG
 docker exec flowdesk-jenkins ls -l /etc/rancher/k3s/k3s.yaml
 docker exec flowdesk-jenkins kubectl get nodes -o wide
+docker exec flowdesk-jenkins k3s ctr -n k8s.io images ls
 ```
 
 If the push fails with `insufficient_scope: authorization failed`, verify:

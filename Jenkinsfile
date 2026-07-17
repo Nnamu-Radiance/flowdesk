@@ -50,7 +50,7 @@ pipeline {
     booleanParam(
       name: 'PUSH_TO_REGISTRY',
       defaultValue: false,
-      description: 'Push built images to REGISTRY. Leave false only when Jenkins can import images into the local Kubernetes container runtime.'
+      description: 'Push built images to REGISTRY. Leave false for same-VPS k3s deploys that import images into the local Kubernetes container runtime.'
     )
     string(
       name: 'SMOKE_BASE_URL',
@@ -236,24 +236,42 @@ PY
           set -e
           echo "---- Kubernetes image import preflight ----"
           id
+          echo "k3s binary: $(command -v k3s || true)"
           ls -l /run/k3s/containerd/containerd.sock || true
+          ls -ld /run/k3s /run/k3s/containerd || true
+          echo "---- /run/k3s mountinfo ----"
+          grep ' /run/k3s' /proc/self/mountinfo || true
+          echo "---- Jenkins container mounts containing k3s ----"
+          docker inspect flowdesk-jenkins --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' 2>/dev/null | grep k3s || true
 
-          if command -v k3s >/dev/null 2>&1 && k3s ctr -n k8s.io images ls >/dev/null 2>&1; then
+          if command -v k3s >/dev/null 2>&1 && k3s ctr -n k8s.io images ls >/tmp/k3s-ctr.out 2>/tmp/k3s-ctr.err; then
             echo "Using k3s ctr for local Kubernetes image imports."
             exit 0
           fi
-          if command -v ctr >/dev/null 2>&1 && ctr -n k8s.io images ls >/dev/null 2>&1; then
+          if [ -s /tmp/k3s-ctr.err ]; then
+            echo "k3s ctr check failed:"
+            cat /tmp/k3s-ctr.err
+          fi
+          if command -v ctr >/dev/null 2>&1 && ctr -n k8s.io images ls >/tmp/ctr.out 2>/tmp/ctr.err; then
             echo "Using ctr for local Kubernetes image imports."
             exit 0
           fi
-          if command -v nerdctl >/dev/null 2>&1 && nerdctl -n k8s.io images >/dev/null 2>&1; then
+          if [ -s /tmp/ctr.err ]; then
+            echo "ctr check failed:"
+            cat /tmp/ctr.err
+          fi
+          if command -v nerdctl >/dev/null 2>&1 && nerdctl -n k8s.io images >/tmp/nerdctl.out 2>/tmp/nerdctl.err; then
             echo "Using nerdctl for local Kubernetes image imports."
             exit 0
           fi
+          if [ -s /tmp/nerdctl.err ]; then
+            echo "nerdctl check failed:"
+            cat /tmp/nerdctl.err
+          fi
 
           echo "Jenkins cannot reach the local Kubernetes container runtime for image imports."
-          echo "Either fix the k3s/containerd socket mount and service, or run this job with PUSH_TO_REGISTRY=true so Kubernetes pulls images from ${REGISTRY}/${IMAGE_NAMESPACE}."
-          echo "For bundled same-server k3s deploys, verify k3s is running on the host and recreate Jenkins with /run/k3s/containerd mounted."
+          echo "Same-VPS deploys use PUSH_TO_REGISTRY=false, so fix k3s/containerd access before building images."
+          echo "Verify k3s is running on the host, then recreate Jenkins with /run/k3s/containerd mounted so this container sees the live socket."
           exit 1
         '''
       }
@@ -314,7 +332,7 @@ PY
             elif command -v nerdctl >/dev/null 2>&1 && nerdctl -n k8s.io images >/dev/null 2>&1; then
               nerdctl -n k8s.io load -i "$archive"
             else
-              echo "No working Kubernetes image import tool found. Fix k3s/containerd access, or run with PUSH_TO_REGISTRY=true."
+              echo "No working Kubernetes image import tool found. Fix k3s/containerd access for same-VPS image imports."
               exit 1
             fi
           }

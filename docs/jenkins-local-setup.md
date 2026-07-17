@@ -106,21 +106,23 @@ Expected successful result:
 
 If Jenkins reaches `Push to Registry`, the job is not running with `LOCAL_ONLY=true`. Re-run with parameters and keep `LOCAL_ONLY` checked for local CI.
 
-## Same-server deploy without Docker Hub
+## Same-server deploy
 
-If Jenkins and Kubernetes are on the same server and Kubernetes can use Jenkins' locally built Docker images, run `Build with Parameters` with:
+For same-server k3s deployments that use locally built images, run `Build with Parameters` with:
 
 1. `LOCAL_ONLY=false`
 2. `PUSH_TO_REGISTRY=false`
 
-This builds images locally, skips Docker Hub, imports the built images into the Kubernetes runtime, deploys to Kubernetes, and runs smoke tests. On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`; if those tools are not available, use a registry instead.
+This builds images locally, imports them into the Kubernetes runtime, deploys to Kubernetes, and runs smoke tests.
+
+On k3s/containerd servers, the Jenkins agent must be able to run `k3s ctr -n k8s.io images import`, `ctr -n k8s.io images import`, or `nerdctl -n k8s.io load`; if the preflight fails, fix the local runtime socket/mount before rerunning.
 
 To choose which parts of the pipeline run, use these checkboxes in `Build with Parameters`:
 
 1. `RUN_LINT=true|false`
 2. `RUN_UNIT_TESTS=true|false`
 3. `BUILD_DOCKER_IMAGES=true|false`
-4. `PUSH_TO_REGISTRY=true|false`
+4. `PUSH_TO_REGISTRY=true|false` (default `false`)
 
 For example, to debug only Kubernetes deploy and smoke tests after earlier stages already passed, set `LOCAL_ONLY=false`, `RUN_LINT=false`, `RUN_UNIT_TESTS=false`, `BUILD_DOCKER_IMAGES=false`, and `PUSH_TO_REGISTRY=false`. Set `DEPLOY_IMAGE_TAG` to an existing image tag if you want to update app deployments to that tag; leave it blank to re-apply manifests and keep the currently deployed app images.
 
@@ -129,6 +131,16 @@ For bundled same-server k3s deploys, the Jenkins container also needs the host k
 ```bash
 docker compose up -d --build --force-recreate --no-deps jenkins
 docker exec flowdesk-jenkins kubectl get nodes -o wide
+docker exec flowdesk-jenkins k3s ctr -n k8s.io images ls
+```
+
+If the host command `sudo k3s ctr -n k8s.io images ls` works but the same command fails inside `flowdesk-jenkins`, restart k3s and recreate Jenkins so the container mounts the live socket:
+
+```bash
+sudo systemctl restart k3s
+cd /var/www/flowdesk
+docker compose up -d --force-recreate --no-deps jenkins
+docker exec flowdesk-jenkins k3s ctr -n k8s.io images ls
 ```
 
 The bundled Jenkins Compose service adds Jenkins to group `0` because the k3s containerd socket is commonly mounted as `root:root` with mode `660`. If the pipeline prints `/run/k3s/containerd/containerd.sock` as another group, add that host group id to the Jenkins service as well.
