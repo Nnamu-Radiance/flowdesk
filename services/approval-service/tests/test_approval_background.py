@@ -7,6 +7,20 @@ from apps.approvals.services import ApprovalService
 from apps.approvals.tasks import check_sla_deadlines, consume_workflow_created
 
 
+def test_service_publish_event_delegates_to_notification_event():
+    from apps.approvals.services import publish_event
+
+    with patch("apps.approvals.services.notify_event", return_value={"event_type": "approval.requested"}) as mock_notify:
+        result = publish_event("approval.requested", {"workflow_id": 1}, correlation_id="corr-1")
+
+    assert result == {"event_type": "approval.requested"}
+    mock_notify.assert_called_once_with(
+        "approval.requested",
+        {"workflow_id": 1},
+        correlation_id="corr-1",
+    )
+
+
 def test_publish_sla_warning_delegates_to_shared_publisher():
     with patch("apps.approvals.events.publish_event") as mock_publish:
         publish_sla_warning(workflow_id=55, percentage=75)

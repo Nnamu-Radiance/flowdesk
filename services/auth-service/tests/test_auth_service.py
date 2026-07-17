@@ -114,7 +114,8 @@ def test_user_endpoints(django_user_model):
     }
     response = client.post(reverse("auth-users"), new_user_data)
     assert response.status_code == 201
-    assert django_user_model.objects.filter(email="new@example.com").exists()
+    created_user = django_user_model.objects.get(email="new@example.com")
+    assert created_user.approver_type == ""
 
     # Test Update Role
     response = client.patch(
@@ -125,6 +126,16 @@ def test_user_endpoints(django_user_model):
     user.refresh_from_db()
     assert user.role == "approver"
     assert user.approver_type == "dean"
+
+    response = client.patch(
+        reverse("auth-user-role", kwargs={"pk": user.pk}),
+        {"role": "submitter"},
+        format="json",
+    )
+    assert response.status_code == 200
+    user.refresh_from_db()
+    assert user.role == "submitter"
+    assert user.approver_type == ""
 
     # Test Logout (mock)
     response = client.post(reverse("auth-logout"))
